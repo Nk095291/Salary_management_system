@@ -22,12 +22,6 @@ class CreateHrCommandTests(TestCase):
     - Dev mode prints temporary password to stdout.
     """
 
-    TEST_CASES = [
-        'New email creates HR user, employee link, and sends email.',
-        'Duplicate email raises command error.',
-        'Dev mode prints temporary password to stdout.',
-    ]
-
     def test_create_hr__new_email__creates_user_and_sends_mail(self):
         """New email creates HR user, employee link, and sends email."""
         # GIVEN

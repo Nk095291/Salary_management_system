@@ -45,12 +45,6 @@ class EmployeeModelTests(TestCase):
     - date_relieving before date_joining fails validation.
     """
 
-    TEST_CASES = [
-        'Creating an employee assigns the first employee_id as EMP-00001.',
-        'Duplicate personal_email raises validation error.',
-        'date_relieving before date_joining fails validation.',
-    ]
-
     def test_Employee__first_record__assigns_employee_id_emp_00001(self):
         """Creating an employee assigns the first employee_id as EMP-00001."""
         # GIVEN

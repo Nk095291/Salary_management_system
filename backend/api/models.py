@@ -4,8 +4,6 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import Max
-from django.utils import timezone
 
 
 class Gender(models.TextChoices):
@@ -89,9 +87,6 @@ class Employee(models.Model):
     def __str__(self):
         return f'{self.employee_id} - {self.first_name} {self.last_name}'
 
-    def _generate_employee_id(self):
-        return f'EMP-{self.id:05d}'
-
     def clean(self):
         super().clean()
         if (
@@ -105,10 +100,12 @@ class Employee(models.Model):
     
 
     def save(self, *args, **kwargs):
-        if not self.employee_id:
-            self.employee_id = self._generate_employee_id()
+        is_new = self.pk is None
         self.full_clean()
         super().save(*args, **kwargs)
+        if is_new and not self.employee_id:
+            self.employee_id = f'EMP-{self.pk:05d}'
+            super().save(update_fields=['employee_id'])
 
 
 class HRUserManager(BaseUserManager):

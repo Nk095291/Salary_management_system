@@ -37,6 +37,15 @@ API:
 - `POST /api/auth/refresh/` — body: `{"refresh": "..."}`
 - `GET /api/auth/me/` — header: `Authorization: Bearer <access>`
 
+Employee CRUD (requires `Authorization: Bearer <access>` from an HR user):
+
+- `GET /api/employees/` — list (paginated; optional `?department=`, `?country=`, `?status=`)
+- `POST /api/employees/` — create
+- `GET /api/employees/{id}/` — retrieve
+- `PATCH /api/employees/{id}/` — partial update
+- `PUT /api/employees/{id}/` — full update
+- `DELETE /api/employees/{id}/` — delete
+
 `create_hr` prompts for email, generates a password, emails credentials, and prints the password in the console when `DEBUG=True`.
 
 ## Frontend setup

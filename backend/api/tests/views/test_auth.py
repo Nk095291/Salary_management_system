@@ -14,11 +14,6 @@ class TokenObtainPairViewTests(APITestCase):
     - Invalid password returns 401 unauthorized.
     """
 
-    TEST_CASES = [
-        'Valid credentials return access and refresh tokens.',
-        'Invalid password returns 401 unauthorized.',
-    ]
-
     def test_TokenObtainPairView__valid_credentials__returns_tokens(self):
         """Valid credentials return access and refresh tokens."""
         # GIVEN
