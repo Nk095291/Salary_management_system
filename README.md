@@ -59,3 +59,13 @@ npm run dev
 App: http://localhost:5173
 
 The Vite dev server proxies `/api` requests to Django on port 8000.
+
+**Frontend API contract:** [frontend/docs/API.md](frontend/docs/API.md)
+
+### UI routes
+
+| Route | Page |
+|-------|------|
+| `/login` | HR login |
+| `/profile` | Current user from `/api/auth/me/` |
+| `/employees` | Employee list, filters, CRUD |

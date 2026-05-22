@@ -1,18 +1,41 @@
-import { useState } from 'react'
-import './App.css'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { AuthProvider } from './context/AuthContext';
+import { EmployeesPage } from './pages/EmployeesPage';
+import { LoginPage } from './pages/LoginPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { hasAccessToken } from './api/client';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
-
+function RootRedirect() {
   return (
-    <main className="app">
-      <h1>React + Django</h1>
-      <p>Frontend is running. Connect it to the Django API at <code>/api/</code>.</p>
-      <button type="button" onClick={() => setCount((value) => value + 1)}>
-        Count is {count}
-      </button>
-    </main>
-  )
+    <Navigate to={hasAccessToken() ? '/profile' : '/login'} replace />
+  );
 }
 
-export default App
+function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/employees" element={<EmployeesPage />} />
+          </Route>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="*" element={<RootRedirect />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
+
+export default App;
