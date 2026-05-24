@@ -1,10 +1,13 @@
 from collections import defaultdict
+import logging
 import statistics
 from decimal import Decimal
 
-from django.db.models import Avg, Count, Max, Min, Sum
+from django.db.models import Avg, Count, Max, Min, Q, Sum
 
 from api.models import Employee, EmployeeStatus, Gender
+
+logger = logging.getLogger(__name__)
 
 
 def active_employees():
@@ -33,7 +36,17 @@ def _empty_gender_distribution() -> dict[str, int]:
 
 def get_overview() -> dict:
     qs = active_employees()
-    total = qs.count()
+
+    agg_kwargs = {
+        'total': Count('id'),
+        'avg_salary': Avg('salary'),
+    }
+    for index, gender in enumerate(GENDER_ORDER):
+        agg_kwargs[f'gender_{index}'] = Count('id', filter=Q(gender=gender))
+
+    agg = qs.aggregate(**agg_kwargs)
+    total = agg['total']
+
     if total == 0:
         return {
             'total_employees': 0,
@@ -42,38 +55,29 @@ def get_overview() -> dict:
             'gender_distribution': _empty_gender_distribution(),
         }
 
-    # Single query for avg + gender breakdown
-    agg = qs.aggregate(avg=Avg('salary'))
-    avg_salary = _decimal(agg['avg'])
-
-    # Single query for highest paid country
-    highest = (
-        qs.values('country')
-        .annotate(avg_salary=Avg('salary'))
-        .order_by('-avg_salary')
-        .first()
-    )
-    highest_paid_country = highest['country'] if highest else None
-
-    # Single query for gender distribution
-    gender_counts = _empty_gender_distribution()
-    for row in qs.values('gender').annotate(c=Count('id')):
-        if row['gender'] in gender_counts:
-            gender_counts[row['gender']] += row['c']
-
     gender_distribution = {
-        gender: round(gender_counts[gender] / total * 100)
-        for gender in GENDER_ORDER
+        gender: round((agg[f'gender_{index}'] / total) * 100)
+        for index, gender in enumerate(GENDER_ORDER)
     }
     remainder = 100 - sum(gender_distribution.values())
     if remainder:
-        top_key = max(gender_distribution, key=gender_distribution.get)
-        gender_distribution[top_key] += remainder
+        logger.warning(
+            'Gender distribution percentages sum to %s, expected 100 (remainder=%s).',
+            sum(gender_distribution.values()),
+            remainder,
+        )
+
+    highest = (
+        qs.values('country')
+        .annotate(country_avg_salary=Avg('salary'))
+        .order_by('-country_avg_salary')
+        .first()
+    )
 
     return {
         'total_employees': total,
-        'avg_salary': round(avg_salary, 2),
-        'highest_paid_country': highest_paid_country,
+        'avg_salary': round(_decimal(agg['avg_salary']), 2),
+        'highest_paid_country': highest['country'] if highest else None,
         'gender_distribution': gender_distribution,
     }
 

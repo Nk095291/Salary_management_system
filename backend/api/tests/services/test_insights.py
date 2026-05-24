@@ -9,8 +9,8 @@ from api.tests.factory.models.employee import EmployeeFactory
 
 
 def expected_overview_query_count(*, has_active_employees: bool) -> int:
-    """COUNT only when empty; otherwise COUNT + AVG + country AVG + gender GROUP BY."""
-    return 1 if not has_active_employees else 4
+    """One combined aggregate; plus country GROUP BY when employees exist."""
+    return 1 if not has_active_employees else 2
 
 
 def expected_by_country_query_count() -> int:
@@ -89,7 +89,8 @@ class GetOverviewTests(TestCase):
     Covered cases:
     - No active employees returns zeros and empty gender distribution.
     - Active employees return aggregated metrics and highest-paid country.
-    - Gender percentages are adjusted so they sum to 100.
+    - Gender percentages that sum to 100 produce no warning.
+    - Rounding remainder logs a warning without adjusting percentages.
     - Terminated employees are excluded from metrics.
     - Predictable DB query count for empty and populated datasets.
     """
@@ -97,7 +98,8 @@ class GetOverviewTests(TestCase):
     TEST_CASES = [
         'No active employees returns zeros and empty gender distribution.',
         'Active employees return aggregated metrics and highest-paid country.',
-        'Gender percentages are adjusted so they sum to 100.',
+        'Gender percentages that sum to 100 produce no warning.',
+        'Rounding remainder logs a warning without adjusting percentages.',
         'Terminated employees are excluded from metrics.',
         'Predictable DB query count for empty and populated datasets.',
     ]
@@ -146,8 +148,28 @@ class GetOverviewTests(TestCase):
         self.assertEqual(result['highest_paid_country'], 'United States')
         self.assertEqual(sum(result['gender_distribution'].values()), 100)
 
-    def test_getOverview__rounding_remainder__adjusts_largest_bucket(self):
-        """Gender percentages are adjusted so they sum to 100."""
+    def test_getOverview__gender_distribution_sums_to_100__no_warning(self):
+        """Gender percentages that sum to 100 produce no warning."""
+        EmployeeFactory.create(
+            gender=Gender.MALE,
+            salary=Decimal('50000.00'),
+            status=EmployeeStatus.ACTIVE,
+        )
+        EmployeeFactory.create(
+            gender=Gender.FEMALE,
+            salary=Decimal('50000.00'),
+            status=EmployeeStatus.ACTIVE,
+            personal_email='female.personal@example.com',
+            company_email='female@company.com',
+        )
+
+        with self.assertNoLogs('api.services.insights', level='WARNING'):
+            result = insights.get_overview()
+
+        self.assertEqual(sum(result['gender_distribution'].values()), 100)
+
+    def test_getOverview__rounding_remainder__logs_warning_without_adjusting(self):
+        """Rounding remainder logs a warning without adjusting percentages."""
         for index, gender in enumerate(
             (Gender.MALE, Gender.FEMALE, Gender.NON_BINARY),
             start=1,
@@ -160,10 +182,12 @@ class GetOverviewTests(TestCase):
                 company_email=f'remainder{index}@company.com',
             )
 
-        result = insights.get_overview()
+        with self.assertLogs('api.services.insights', level='WARNING') as logs:
+            result = insights.get_overview()
 
         self.assertEqual(result['total_employees'], 3)
-        self.assertEqual(sum(result['gender_distribution'].values()), 100)
+        self.assertEqual(sum(result['gender_distribution'].values()), 99)
+        self.assertIn('remainder=1', logs.output[0])
 
     def test_getOverview__terminated_employees__excluded_from_count(self):
         """Terminated employees are excluded from metrics."""
@@ -202,23 +226,18 @@ class GetOverviewTests(TestCase):
     ):
         """When country aggregation returns no row, highest_paid_country is None."""
         mock_qs = MagicMock()
-        mock_qs.count.return_value = 2
-        mock_qs.aggregate.return_value = {'avg': Decimal('50000.00')}
+        mock_qs.aggregate.return_value = {
+            'total': 2,
+            'avg_salary': Decimal('50000.00'),
+            'gender_0': 1,
+            'gender_1': 1,
+            'gender_2': 0,
+            'gender_3': 0,
+        }
 
         country_chain = MagicMock()
         country_chain.annotate.return_value.order_by.return_value.first.return_value = None
-
-        gender_chain = MagicMock()
-        gender_chain.annotate.return_value = []
-
-        def values_side_effect(*args, **_kwargs):
-            if args and args[0] == 'country':
-                return country_chain
-            if args and args[0] == 'gender':
-                return gender_chain
-            return MagicMock()
-
-        mock_qs.values.side_effect = values_side_effect
+        mock_qs.values.return_value = country_chain
         mock_active_employees.return_value = mock_qs
 
         result = insights.get_overview()
@@ -318,12 +337,16 @@ class GetByDepartmentTests(TestCase):
 
     Covered cases:
     - Departments return headcount, average salary, and total payroll.
+    - Empty dataset returns an empty list.
+    - Employees with an empty department are grouped under an empty string.
     - Terminated employees are excluded.
     - Predictable DB query count.
     """
 
     TEST_CASES = [
         'Departments return headcount, average salary, and total payroll.',
+        'Empty dataset returns an empty list.',
+        'Employees with an empty department are grouped under an empty string.',
         'Terminated employees are excluded.',
         'Predictable DB query count.',
     ]
@@ -361,6 +384,23 @@ class GetByDepartmentTests(TestCase):
         sales = by_department['Sales']
         self.assertEqual(sales['headcount'], 1)
         self.assertEqual(sales['total_payroll'], 60000.0)
+
+    def test_getByDepartment__no_active_employees__returns_empty_list(self):
+        """Empty dataset returns an empty list."""
+        self.assertEqual(insights.get_by_department(), [])
+
+    def test_getByDepartment__empty_department__groups_correctly(self):
+        """Employees without a department are grouped under an empty string."""
+        EmployeeFactory.create(
+            department='',
+            salary=Decimal('60000.00'),
+            status=EmployeeStatus.ACTIVE,
+        )
+
+        result = insights.get_by_department()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['department'], '')
 
     def test_getByDepartment__terminated_employees__excluded(self):
         """Terminated employees are excluded."""
@@ -402,6 +442,7 @@ class GetByJobTitleTests(TestCase):
     TEST_CASES = [
         'No filters returns sorted job title breakdown with seniority averages.',
         'Country, department, and job title filters narrow results.',
+        'Empty list filters bypass filtering and return all matching employees.',
         'Weighted average salary is computed across seniority levels.',
         'Predictable DB query count.',
     ]
@@ -459,6 +500,20 @@ class GetByJobTitleTests(TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['job_title'], 'Software Engineer')
+
+    def test_getByJobTitle__empty_list_filters__are_ignored(self):
+        """Passing an empty list for filters bypasses the filter (treats as None)."""
+        EmployeeFactory.create(
+            country='India',
+            job_title='Engineer',
+            salary=Decimal('50000.00'),
+            status=EmployeeStatus.ACTIVE,
+        )
+
+        result = insights.get_by_job_title(countries=[])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['job_title'], 'Engineer')
 
     def test_getByJobTitle__multiple_seniority_levels__weighted_average(self):
         """Weighted average salary is computed across seniority levels."""
@@ -527,6 +582,10 @@ class GetPayEquityTests(TestCase):
 
     Covered cases:
     - Departments return per-gender averages and pay gap percentage.
+    - Negative pay gap when female average exceeds male average.
+    - Unrecognized genders are ignored without error.
+    - Departments with only unrecognized genders return an empty list.
+    - Empty dataset returns an empty list.
     - Gap is zero when male average salary is zero.
     - Terminated employees are excluded.
     - Predictable DB query count.
@@ -534,6 +593,10 @@ class GetPayEquityTests(TestCase):
 
     TEST_CASES = [
         'Departments return per-gender averages and pay gap percentage.',
+        'Negative pay gap when female average exceeds male average.',
+        'Unrecognized genders are ignored without error.',
+        'Departments with only unrecognized genders return an empty list.',
+        'Empty dataset returns an empty list.',
         'Gap is zero when male average salary is zero.',
         'Terminated employees are excluded.',
         'Predictable DB query count.',
@@ -582,6 +645,65 @@ class GetPayEquityTests(TestCase):
         self.assertEqual(row['non_binary_avg'], 85000.0)
         self.assertEqual(row['prefer_not_to_say_avg'], 90000.0)
         self.assertEqual(row['gap_percent'], 20.0)
+
+    def test_getPayEquity__female_earns_more__computes_negative_gap(self):
+        """When female average is higher, pay gap is a negative percentage."""
+        EmployeeFactory.create(
+            department='Engineering',
+            gender=Gender.MALE,
+            salary=Decimal('50000.00'),
+            status=EmployeeStatus.ACTIVE,
+        )
+        EmployeeFactory.create(
+            department='Engineering',
+            gender=Gender.FEMALE,
+            salary=Decimal('100000.00'),
+            status=EmployeeStatus.ACTIVE,
+            personal_email='eng-female-higher.personal@example.com',
+            company_email='eng-female-higher@company.com',
+        )
+
+        result = insights.get_pay_equity()
+
+        self.assertEqual(result[0]['gap_percent'], -100.0)
+
+    def test_getPayEquity__unrecognized_gender__is_ignored(self):
+        """Genders outside GENDER_ORDER do not crash the computation."""
+        EmployeeFactory.create(
+            department='Engineering',
+            gender='UNKNOWN_GENDER',
+            salary=Decimal('99999.00'),
+            status=EmployeeStatus.ACTIVE,
+        )
+        EmployeeFactory.create(
+            department='Engineering',
+            gender=Gender.MALE,
+            salary=Decimal('50000.00'),
+            status=EmployeeStatus.ACTIVE,
+            personal_email='eng-male-only.personal@example.com',
+            company_email='eng-male-only@company.com',
+        )
+
+        result = insights.get_pay_equity()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['male_avg'], 50000.0)
+        self.assertEqual(result[0]['female_avg'], 0.0)
+
+    def test_getPayEquity__only_unrecognized_gender__returns_empty_list(self):
+        """Departments with only unrecognized genders produce no pay-equity row."""
+        EmployeeFactory.create(
+            department='Engineering',
+            gender='UNKNOWN_GENDER',
+            salary=Decimal('50000.00'),
+            status=EmployeeStatus.ACTIVE,
+        )
+
+        self.assertEqual(insights.get_pay_equity(), [])
+
+    def test_getPayEquity__no_active_employees__returns_empty_list(self):
+        """Empty dataset returns an empty list."""
+        self.assertEqual(insights.get_pay_equity(), [])
 
     def test_getPayEquity__no_male_in_department__gap_is_zero(self):
         """Gap is zero when male average salary is zero."""

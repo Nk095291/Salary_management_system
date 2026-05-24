@@ -28,3 +28,15 @@ class _AuthenticatedNonHRUser:
 def auth_as_non_hr(client):
     """Authenticate as a non-HR user (IsHRUser permission should deny access)."""
     client.force_authenticate(user=_AuthenticatedNonHRUser())
+
+
+def auth_as_inactive_hr(client, email='inactive-hr@company.com', password='testpass123'):
+    """Authenticate as a deactivated HR user (IsHRUser permission should deny access)."""
+    user = HRUser.objects.create_user(
+        email=email,
+        password=password,
+        first_name='Inactive',
+        last_name='HR',
+        is_active=False,
+    )
+    client.force_authenticate(user=user)
