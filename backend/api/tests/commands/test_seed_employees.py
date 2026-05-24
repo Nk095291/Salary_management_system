@@ -2,10 +2,11 @@ import math
 import tempfile
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from django.core.management import call_command
 from django.db import IntegrityError
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from api.models import Employee
 from api.utils.management.commands.seed_employees import DATA_DIR, load_names
@@ -35,6 +36,8 @@ class SeedEmployeesCommandTests(TestCase):
     - Same seed produces reproducible first employee name.
     - Repeated runs without clear accumulate employee rows.
     - Query count matches bulk_create batching and optional clear delete.
+    - Exact batch multiples skip the final remainder insert.
+    - Stdout prints clear, progress, and success messages.
     """
 
     def test_seed_employees__count_five__creates_five_rows(self):
@@ -131,73 +134,110 @@ class SeedEmployeesCommandTests(TestCase):
                 clear=True,
             )
 
+    def test_seed_employees__exact_multiple_batches__leaves_no_remainder(self):
+        """Count as an exact multiple of batch_size skips the final remainder insert."""
+        count = 2000
+        batch_size = 1000
+        expected_queries = expected_seed_query_count(
+            count=count,
+            batch_size=batch_size,
+            clear=True,
+        )
+
+        with self.assertNumQueries(expected_queries):
+            call_command(
+                'seed_employees',
+                count=count,
+                seed=1,
+                batch_size=batch_size,
+                clear=True,
+            )
+        self.assertEqual(Employee.objects.count(), 2000)
+
+    def test_seed_employees__stdout_messages__prints_progress_and_success(self):
+        """Validates that clear, progress, and success messages print to stdout."""
+        call_command('seed_employees', count=2, clear=True)
+
+        out = StringIO()
+        call_command(
+            'seed_employees',
+            count=2500,
+            batch_size=1000,
+            clear=True,
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn('Cleared 2 existing employee(s).', output)
+        self.assertIn('Created 1000/2500 employees...', output)
+        self.assertIn('Created 2000/2500 employees...', output)
+        self.assertIn('Seeded 2500 employees in', output)
+
 
 class SeedEmployeesCommandEdgeTests(TestCase):
     """
     Edge-case tests for seed_employees management command.
 
     These capture boundary behavior; failures indicate follow-up work in the
-    command implementation.
+    command implementation. Missing/empty name file tests patch DATA_DIR on
+    the management command module (not BASE_DIR settings).
     """
 
-    def test_seed_employees__count_zero__creates_no_rows(self):
-        """Seeding with count zero should not create employees."""
+    def test_seed_employees__count_zero__rejects_without_changing_rows(self):
+        """Count zero should be rejected without creating or deleting employees."""
         # GIVEN
         call_command('seed_employees', count=2, seed=1, clear=True)
+        err = StringIO()
 
         # WHEN
-        call_command('seed_employees', count=0, seed=1)
+        call_command('seed_employees', count=0, seed=1, clear=True, stderr=err)
 
         # THEN
         self.assertEqual(Employee.objects.count(), 2)
+        self.assertIn('Count must be greater than 0.', err.getvalue())
 
-    def test_seed_employees__count_zero__query_count_without_inserts(self):
-        """Seeding with count zero should only run transaction wrapper queries."""
-        # GIVEN
-        expected_queries = expected_seed_query_count(count=0, batch_size=1000, clear=False)
-
+    def test_seed_employees__count_zero__issues_no_db_queries(self):
+        """Count zero should return before opening a transaction or touching the DB."""
         # WHEN / THEN
-        with self.assertNumQueries(expected_queries):
+        with self.assertNumQueries(0):
             call_command('seed_employees', count=0, seed=1, clear=True)
 
-    def test_seed_employees__negative_count__raises_or_creates_nothing(self):
-        """Negative count should be rejected or create no employees."""
+    def test_seed_employees__negative_count__rejects_without_changing_rows(self):
+        """Negative count should be rejected without creating or deleting employees."""
         # GIVEN
         call_command('seed_employees', count=1, seed=1, clear=True)
+        err = StringIO()
 
         # WHEN
-        call_command('seed_employees', count=-5, seed=1)
+        call_command('seed_employees', count=-5, seed=1, stderr=err)
 
         # THEN
         self.assertEqual(Employee.objects.count(), 1)
+        self.assertIn('Count must be greater than 0.', err.getvalue())
 
     def test_seed_employees__missing_name_files__creates_no_rows(self):
         """Missing name files should abort seeding without creating employees."""
-        # GIVEN
         with tempfile.TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
             err = StringIO()
-            with override_settings(BASE_DIR=tmp_dir):
-                # WHEN
+
+            with patch('api.management.commands.seed_employees.DATA_DIR', data_dir):
                 call_command('seed_employees', count=5, seed=1, stderr=err)
 
-            # THEN
             self.assertEqual(Employee.objects.count(), 0)
             self.assertIn('Name files required', err.getvalue())
 
     def test_seed_employees__empty_name_files__creates_no_rows(self):
         """Empty name files should abort seeding without creating employees."""
-        # GIVEN
         with tempfile.TemporaryDirectory() as tmp_dir:
-            data_dir = Path(tmp_dir) / 'data'
-            data_dir.mkdir()
+            data_dir = Path(tmp_dir)
             (data_dir / 'first_names.txt').write_text('\n\n', encoding='utf-8')
             (data_dir / 'last_names.txt').write_text('Doe\n', encoding='utf-8')
             err = StringIO()
-            with override_settings(BASE_DIR=tmp_dir):
-                # WHEN
+
+            with patch('api.management.commands.seed_employees.DATA_DIR', data_dir):
                 call_command('seed_employees', count=5, seed=1, stderr=err)
 
-            # THEN
             self.assertEqual(Employee.objects.count(), 0)
             self.assertIn('must not be empty', err.getvalue())
 

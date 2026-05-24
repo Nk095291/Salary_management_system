@@ -66,7 +66,7 @@ class SeedEmployeesUtilsTests(TestCase):
         slug = slugify_email_part('Jane O\'Connor-Smith')
 
         # THEN
-        self.assertEqual(slug, 'jane.o.connorsmith')
+        self.assertEqual(slug, 'jane.o.connor.smith')
 
     def test_build_employee__valid_inputs__returns_unsaved_employee(self):
         """build_employee returns an unsaved Employee with names from input lists."""

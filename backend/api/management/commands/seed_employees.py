@@ -42,6 +42,10 @@ class Command(BaseCommand):
         clear = options['clear']
         rng = random.Random(options['seed'])
 
+        if count <= 0:
+            self.stderr.write(self.style.ERROR('Count must be greater than 0.'))
+            return
+
         first_names_path = DATA_DIR / 'first_names.txt'
         last_names_path = DATA_DIR / 'last_names.txt'
         if not first_names_path.exists() or not last_names_path.exists():
