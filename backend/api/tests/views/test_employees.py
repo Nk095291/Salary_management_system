@@ -1,4 +1,5 @@
 import random
+from datetime import date
 from decimal import Decimal
 
 from django.urls import reverse
@@ -16,7 +17,7 @@ from api.tests.employee_test_data import (
     valid_employee_payload,
 )
 from api.tests.factory.models.employee import EmployeeFactory
-from api.tests.helpers import auth_as_hr
+from api.tests.helpers import auth_as_hr, auth_as_non_hr
 
 
 class EmployeeViewSetTests(APITestCase):
@@ -25,8 +26,13 @@ class EmployeeViewSetTests(APITestCase):
 
     Covered cases:
     - Unauthenticated list request returns 401 unauthorized.
+    - Authenticated non-HR user list and detail requests return 403 forbidden.
+    - Unauthenticated and non-HR access to departments/countries actions denied.
     - Authenticated HR user list returns paginated employees.
+    - Default page size, page_size query param, and max_page_size cap.
     - List filters by department, country, and status query params.
+    - Combined filters apply AND logic across dimensions.
+    - List results ordered by ascending id.
     - List filters by multiple departments or countries (OR within each dimension).
     - Departments and countries actions return distinct sorted values.
     - Filter with no matches returns empty results.
@@ -34,7 +40,11 @@ class EmployeeViewSetTests(APITestCase):
     - Missing required field returns 400 bad request.
     - Present field with invalid value returns 400 bad request.
     - Existing pk retrieve returns employee details.
+    - Retrieve, patch, and delete on non-existent pk return 404.
     - Patch payload updates employee fields.
+    - Patch date_relieving while status is Active returns 400 bad request.
+    - Patch date_relieving before date_joining returns 400 bad request.
+    - Put request returns method not allowed.
     - Delete existing employee removes record from database.
     """
 
@@ -50,6 +60,78 @@ class EmployeeViewSetTests(APITestCase):
         # THEN
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_EmployeeViewSet__non_hr_user_list__returns_403(self):
+        """Authenticated non-HR user list request returns 403 forbidden."""
+        # GIVEN
+        EmployeeFactory.create()
+        auth_as_non_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_EmployeeViewSet__non_hr_user_detail__returns_403(self):
+        """Authenticated non-HR user detail request returns 403 forbidden."""
+        # GIVEN
+        employee = EmployeeFactory.create()
+        auth_as_non_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_EmployeeViewSet__unauthenticated_departments__returns_401(self):
+        """Unauthenticated departments action returns 401 unauthorized."""
+        # GIVEN
+        url = reverse('employee-departments')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_EmployeeViewSet__non_hr_user_departments__returns_403(self):
+        """Authenticated non-HR user departments action returns 403 forbidden."""
+        # GIVEN
+        auth_as_non_hr(self.client)
+        url = reverse('employee-departments')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_EmployeeViewSet__unauthenticated_countries__returns_401(self):
+        """Unauthenticated countries action returns 401 unauthorized."""
+        # GIVEN
+        url = reverse('employee-countries')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_EmployeeViewSet__non_hr_user_countries__returns_403(self):
+        """Authenticated non-HR user countries action returns 403 forbidden."""
+        # GIVEN
+        auth_as_non_hr(self.client)
+        url = reverse('employee-countries')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_EmployeeViewSet__authenticated_list__returns_paginated_employees(self):
         """Authenticated HR user list returns paginated employees."""
         # GIVEN
@@ -64,6 +146,49 @@ class EmployeeViewSetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('results', response.data)
         self.assertGreaterEqual(len(response.data['results']), 1)
+
+    def test_EmployeeViewSet__default_page_size__returns_25_results_with_next(self):
+        """Default page size returns 25 results and a next page link when more exist."""
+        # GIVEN
+        EmployeeFactory.create_batch(26)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 25)
+        self.assertIsNotNone(response.data['next'])
+
+    def test_EmployeeViewSet__page_size_query_param__returns_requested_count(self):
+        """page_size query param controls the number of results returned."""
+        # GIVEN
+        EmployeeFactory.create_batch(15)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(url, {'page_size': 10})
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 10)
+
+    def test_EmployeeViewSet__page_size_above_max__capped_at_100(self):
+        """page_size above max_page_size is capped at 100 results."""
+        # GIVEN
+        EmployeeFactory.create_batch(105)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(url, {'page_size': 200})
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 100)
 
     def test_EmployeeViewSet__filter_by_department__returns_matching_only(self):
         """List filtered by department returns only employees in that department."""
@@ -196,6 +321,63 @@ class EmployeeViewSetTests(APITestCase):
             all(item['status'] == matched_status for item in response.data['results'])
         )
 
+    def test_EmployeeViewSet__combined_filters__returns_and_intersection(self):
+        """Combined department, country, and status filters apply AND logic."""
+        # GIVEN
+        matched = EmployeeFactory.create(
+            department='Sales',
+            country='United States',
+            status=EmployeeStatus.ACTIVE,
+        )
+        EmployeeFactory.create(
+            department='Sales',
+            country='United States',
+            status=EmployeeStatus.TERMINATED,
+        )
+        EmployeeFactory.create(
+            department='Sales',
+            country='India',
+            status=EmployeeStatus.ACTIVE,
+        )
+        EmployeeFactory.create(
+            department='Engineering',
+            country='United States',
+            status=EmployeeStatus.ACTIVE,
+        )
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(
+            url,
+            {
+                'departments': 'Sales',
+                'countries': 'United States',
+                'status': EmployeeStatus.ACTIVE,
+            },
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = {item['id'] for item in response.data['results']}
+        self.assertEqual(result_ids, {matched.id})
+
+    def test_EmployeeViewSet__list_ordering__returns_ascending_ids(self):
+        """List endpoint returns employees ordered by ascending id."""
+        # GIVEN
+        employees = EmployeeFactory.create_batch(4)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = [item['id'] for item in response.data['results']]
+        self.assertEqual(result_ids, sorted(result_ids))
+        self.assertGreaterEqual(len(result_ids), len(employees))
+
     def test_EmployeeViewSet__filter_no_matches__returns_empty_results(self):
         """List filtered by non-existent department returns empty results."""
         # GIVEN
@@ -321,6 +503,18 @@ class EmployeeViewSetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['currency'], 'USD')
 
+    def test_EmployeeViewSet__retrieve_nonexistent_pk__returns_404(self):
+        """Retrieve on non-existent pk returns 404 not found."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': 99999})
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_EmployeeViewSet__existing_pk__returns_employee(self):
         """Existing pk retrieve returns employee details."""
         # GIVEN
@@ -362,6 +556,97 @@ class EmployeeViewSetTests(APITestCase):
         employee.refresh_from_db()
         self.assertEqual(employee.salary, updated_salary)
 
+    def test_EmployeeViewSet__patch_date_relieving_while_active__returns_400(
+        self,
+    ):
+        """Patch date_relieving while status is Active returns 400 bad request."""
+        # GIVEN
+        employee = EmployeeFactory.create(
+            status=EmployeeStatus.ACTIVE,
+            date_relieving=None,
+        )
+        relieving_date = date(2025, 6, 1)
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN
+        response = self.client.patch(
+            url,
+            {'date_relieving': relieving_date.isoformat()},
+            format='json',
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('relieving date', response.data)
+        self.assertEqual(
+            response.data['relieving date'][0],
+            'Cannot be set while the employee is active. '
+            'Update the status to Terminated first.',
+        )
+        employee.refresh_from_db()
+        self.assertIsNone(employee.date_relieving)
+        self.assertEqual(employee.status, EmployeeStatus.ACTIVE)
+
+    def test_EmployeeViewSet__patch_relieving_before_joining__returns_400(self):
+        """Patch date_relieving before date_joining returns 400 bad request."""
+        # GIVEN
+        joining_date = date(2020, 6, 1)
+        relieving_date = date(2019, 1, 1)
+        employee = EmployeeFactory.create(
+            status=EmployeeStatus.TERMINATED,
+            date_joining=joining_date,
+            date_relieving=None,
+        )
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN
+        response = self.client.patch(
+            url,
+            {'date_relieving': relieving_date.isoformat()},
+            format='json',
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('relieving date', response.data)
+        self.assertEqual(
+            response.data['relieving date'][0],
+            'Must be on or after the date of joining.',
+        )
+        employee.refresh_from_db()
+        self.assertIsNone(employee.date_relieving)
+
+    def test_EmployeeViewSet__patch_nonexistent_pk__returns_404(self):
+        """Patch on non-existent pk returns 404 not found."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': 99999})
+
+        # WHEN
+        response = self.client.patch(url, {'job_title': fake.job()}, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_EmployeeViewSet__put_existing_pk__returns_method_not_allowed(self):
+        """Put is not supported; full update requests return 405 method not allowed."""
+        # GIVEN
+        employee = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+        payload = valid_employee_payload(
+            personal_email=employee.personal_email,
+            company_email=employee.company_email,
+        )
+
+        # WHEN
+        response = self.client.put(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
     def test_EmployeeViewSet__delete_existing__removes_employee(self):
         """Delete existing employee removes record from database."""
         # GIVEN
@@ -376,3 +661,15 @@ class EmployeeViewSetTests(APITestCase):
         # THEN
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Employee.objects.filter(pk=pk).exists())
+
+    def test_EmployeeViewSet__delete_nonexistent_pk__returns_404(self):
+        """Delete on non-existent pk returns 404 not found."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': 99999})
+
+        # WHEN
+        response = self.client.delete(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

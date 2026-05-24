@@ -20,6 +20,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsHRUser]
     pagination_class = EmployeePagination
     lookup_field = 'pk'
+    http_method_names = ['get', 'post', 'head', 'options', 'patch', 'delete']
 
     def get_queryset(self):
         queryset = Employee.objects.all().order_by('id')

@@ -11,3 +11,15 @@ def auth_as_hr(client, email='hr@company.com', password='testpass123'):
         format='json',
     )
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {response.data["access"]}')
+
+
+class _AuthenticatedNonHRUser:
+    """Minimal user object that passes authentication but fails IsHRUser."""
+
+    is_authenticated = True
+    is_active = True
+
+
+def auth_as_non_hr(client):
+    """Authenticate as a non-HR user (IsHRUser permission should deny access)."""
+    client.force_authenticate(user=_AuthenticatedNonHRUser())

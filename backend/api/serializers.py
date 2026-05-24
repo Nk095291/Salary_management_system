@@ -3,7 +3,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from api.constants import COUNTRY_NAMES
 
-from .models import Currency, Employee, HRUser
+from .models import Currency, Employee, EmployeeStatus, HRUser
 
 
 class EmployeeSummarySerializer(serializers.ModelSerializer):
@@ -50,6 +50,47 @@ class EmployeeSerializer(serializers.ModelSerializer):
                 f'Allowed: {", ".join(COUNTRY_NAMES)}'
             )
         return value
+
+    def validate(self, attrs):
+        date_relieving = attrs.get(
+            'date_relieving',
+            self.instance.date_relieving if self.instance else None,
+        )
+        date_joining = attrs.get(
+            'date_joining',
+            self.instance.date_joining if self.instance else None,
+        )
+        status = attrs.get(
+            'status',
+            self.instance.status if self.instance else EmployeeStatus.ACTIVE,
+        )
+
+        if (
+            'date_relieving' in attrs
+            and date_relieving is not None
+            and status == EmployeeStatus.ACTIVE
+        ):
+            raise serializers.ValidationError(
+                {
+                    'relieving date': (
+                        'Cannot be set while the employee is active. '
+                        'Update the status to Terminated first.'
+                    ),
+                }
+            )
+
+        if (
+            date_relieving is not None
+            and date_joining is not None
+            and date_relieving < date_joining
+        ):
+            raise serializers.ValidationError(
+                {
+                    'relieving date': 'Must be on or after the date of joining.',
+                }
+            )
+
+        return attrs
 
     def create(self, validated_data):
         validated_data.setdefault('currency', Currency.USD)
