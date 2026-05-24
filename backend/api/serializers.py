@@ -114,6 +114,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
                 }
             )
 
+        if status == EmployeeStatus.TERMINATED and date_relieving is None:
+            raise serializers.ValidationError(
+                {
+                    'relieving date': (
+                        'Must be provided when status is Terminated.'
+                    ),
+                }
+            )
+
         if (
             date_relieving is not None
             and date_joining is not None

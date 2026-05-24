@@ -114,6 +114,8 @@ class EmployeeViewSetTests(APITestCase):
     - Patch personal_email or company_email to another employee's email
       returns 400 with user-friendly message.
     - Patch date_relieving while status is Active returns 400 bad request.
+    - Patch status to Terminated without date_relieving returns 400 bad request.
+    - Patch status to Terminated with date_relieving updates both fields.
     - Patch date_relieving before date_joining returns 400 bad request.
     - Put request returns method not allowed.
     - Delete existing employee removes record from database.
@@ -869,6 +871,69 @@ class EmployeeViewSetTests(APITestCase):
         employee.refresh_from_db()
         self.assertIsNone(employee.date_relieving)
         self.assertEqual(employee.status, EmployeeStatus.ACTIVE)
+
+    def test_EmployeeViewSet__patch_status_to_terminated_without_relieving__returns_400(
+        self,
+    ):
+        """Patch status to Terminated without date_relieving returns 400 bad request."""
+        # GIVEN
+        employee = EmployeeFactory.create(
+            status=EmployeeStatus.ACTIVE,
+            date_relieving=None,
+        )
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN
+        response = self.client.patch(
+            url,
+            {'status': EmployeeStatus.TERMINATED},
+            format='json',
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('relieving date', response.data)
+        self.assertEqual(
+            response.data['relieving date'][0],
+            'Must be provided when status is Terminated.',
+        )
+        employee.refresh_from_db()
+        self.assertEqual(employee.status, EmployeeStatus.ACTIVE)
+        self.assertIsNone(employee.date_relieving)
+
+    def test_EmployeeViewSet__patch_status_to_terminated_with_relieving__updates_both(
+        self,
+    ):
+        """Patch status to Terminated with date_relieving updates both fields."""
+        # GIVEN
+        joining_date = date(2020, 1, 15)
+        relieving_date = date(2025, 6, 1)
+        employee = EmployeeFactory.create(
+            status=EmployeeStatus.ACTIVE,
+            date_joining=joining_date,
+            date_relieving=None,
+        )
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN
+        response = self.client.patch(
+            url,
+            {
+                'status': EmployeeStatus.TERMINATED,
+                'date_relieving': relieving_date.isoformat(),
+            },
+            format='json',
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], EmployeeStatus.TERMINATED)
+        self.assertEqual(response.data['date_relieving'], relieving_date.isoformat())
+        employee.refresh_from_db()
+        self.assertEqual(employee.status, EmployeeStatus.TERMINATED)
+        self.assertEqual(employee.date_relieving, relieving_date)
 
     def test_EmployeeViewSet__patch_relieving_before_joining__returns_400(self):
         """Patch date_relieving before date_joining returns 400 bad request."""
