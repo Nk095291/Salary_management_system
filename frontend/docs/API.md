@@ -112,7 +112,7 @@ All employee endpoints require HR JWT authentication.
 | `page_size` | number | Items per page (default 25, max 100) |
 | `department` | string | Exact match filter |
 | `country` | string | Exact match filter |
-| `status` | string | Exact match filter (`Active`, `On Leave`, `Terminated`) |
+| `status` | string | Exact match filter (`Active`, `Terminated`) |
 
 **Response** `200`
 
@@ -237,7 +237,7 @@ interface PaginatedResponse<T> {
 | `gender` | `Male`, `Female`, `Non-binary`, `Prefer not to say` |
 | `seniority_level` | `Junior`, `Mid`, `Senior`, `Lead`, `Principal` |
 | `employment_type` | `Full-time`, `Part-time`, `Contract`, `Internship` |
-| `status` | `Active`, `On Leave`, `Terminated` |
+| `status` | `Active`, `Terminated` |
 | `currency` | `USD`, `INR`, `GBP`, `EUR`, `AUD`, `CAD` |
 
 ---

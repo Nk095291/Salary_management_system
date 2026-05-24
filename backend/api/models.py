@@ -30,7 +30,6 @@ class EmploymentType(models.TextChoices):
 
 class EmployeeStatus(models.TextChoices):
     ACTIVE = 'Active', 'Active'
-    ON_LEAVE = 'On Leave', 'On Leave'
     TERMINATED = 'Terminated', 'Terminated'
 
 

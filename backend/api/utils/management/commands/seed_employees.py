@@ -80,15 +80,13 @@ def build_employee(
     country, currency, salary_min, salary_max = rng.choice(COUNTRIES)
     status = rng.choices(
         list(EmployeeStatus.values),
-        weights=[85, 10, 5],
+        weights=[90, 10],
         k=1,
     )[0]
     date_joining = date.today() - timedelta(days=rng.randint(30, 3650))
     date_relieving = None
     if status == EmployeeStatus.TERMINATED:
         date_relieving = date_joining + timedelta(days=rng.randint(180, 2000))
-    elif status == EmployeeStatus.ON_LEAVE:
-        date_relieving = None
 
     date_of_birth = None
     if rng.random() < 0.7:

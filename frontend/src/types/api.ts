@@ -22,7 +22,6 @@ export const EMPLOYMENT_TYPES = [
 
 export const EMPLOYEE_STATUSES = [
   'Active',
-  'On Leave',
   'Terminated',
 ] as const;
 

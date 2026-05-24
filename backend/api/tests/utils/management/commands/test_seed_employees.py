@@ -31,7 +31,6 @@ class SeedEmployeesUtilsTests(TestCase):
     - build_employee picks department and job title from configured mappings.
     - build_employee sets salary within the selected country range.
     - build_employee sets date_relieving when status is terminated.
-    - build_employee leaves date_relieving null when status is on leave.
     """
 
     def test_load_names__file_with_blank_lines__returns_stripped_non_empty(self):
@@ -138,20 +137,6 @@ class SeedEmployeesUtilsTests(TestCase):
         # THEN
         self.assertIsNotNone(employee.date_relieving)
         self.assertGreaterEqual(employee.date_relieving, employee.date_joining)
-
-    def test_build_employee__on_leave_status__leaves_date_relieving_null(self):
-        """build_employee leaves date_relieving null when status is on leave."""
-        # GIVEN
-        rng = random.Random(0)
-        for _ in range(200):
-            employee = build_employee(1, ['Test'], ['User'], rng)
-            if employee.status == EmployeeStatus.ON_LEAVE:
-                break
-        else:
-            self.fail('Expected at least one on-leave employee within 200 attempts.')
-
-        # THEN
-        self.assertIsNone(employee.date_relieving)
 
 
 class SeedEmployeesUtilsEdgeTests(TestCase):
