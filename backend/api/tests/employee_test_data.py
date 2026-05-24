@@ -1,5 +1,6 @@
 import random
 import secrets
+from datetime import date
 from uuid import uuid4
 
 from faker import Faker
@@ -63,4 +64,10 @@ def valid_employee_payload(**overrides):
         'status': random_choice_value(EmployeeStatus),
     }
     data.update(overrides)
+    if data.get('status') == EmployeeStatus.TERMINATED and not data.get('date_relieving'):
+        joining = date.fromisoformat(data['date_joining'])
+        data['date_relieving'] = fake.date_between(
+            start_date=joining,
+            end_date='today',
+        ).isoformat()
     return data
