@@ -1,5 +1,11 @@
 import type { ApiErrorBody } from '../types/api';
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 const ACCESS_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
 
@@ -61,7 +67,7 @@ async function refreshAccessToken(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
 
-  const response = await fetch('/api/auth/refresh/', {
+  const response = await fetch(apiUrl('/api/auth/refresh/'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh }),
@@ -104,7 +110,8 @@ export async function apiRequest<T>(
     }
   }
 
-  let response = await fetch(path, {
+  const url = apiUrl(path);
+  let response = await fetch(url, {
     ...init,
     headers: requestHeaders,
   });
@@ -113,7 +120,7 @@ export async function apiRequest<T>(
     const newAccess = await getRefreshedAccess();
     if (newAccess) {
       requestHeaders.set('Authorization', `Bearer ${newAccess}`);
-      response = await fetch(path, { ...init, headers: requestHeaders });
+      response = await fetch(url, { ...init, headers: requestHeaders });
     }
   }
 

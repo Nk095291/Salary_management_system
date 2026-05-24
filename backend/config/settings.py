@@ -32,7 +32,9 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+ALLOWED_HOSTS = [
+    h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if h.strip()
+]
 
 
 # Application definition
@@ -83,10 +85,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+_db_path = os.getenv('DJANGO_DB_PATH')
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': Path(_db_path) if _db_path else BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -162,7 +165,19 @@ FRONTEND_LOGIN_URL = os.getenv(
     'http://localhost:5173/login',
 )
 
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:5173,http://127.0.0.1:5173',
-).split(',')
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:5173,http://127.0.0.1:5173',
+    ).split(',')
+    if o.strip()
+]
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    CSRF_TRUSTED_ORIGINS = [
+        o.strip()
+        for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
+        if o.strip()
+    ]

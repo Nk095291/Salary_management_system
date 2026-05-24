@@ -87,3 +87,55 @@ The Vite dev server proxies `/api` requests to Django on port 8000.
 | `/profile` | Current user from `/api/auth/me/` |
 | `/employees` | Employee list, filters, CRUD |
 | `/insights` | Salary insights dashboards |
+
+## Deployment
+
+### Backend (Railway + SQLite)
+
+1. Create a [Railway](https://railway.app) project and deploy this repo.
+2. Set the service **Root Directory** to `backend`.
+3. **Networking** → generate a public domain for the API.
+4. (Recommended) **Volumes** → add a volume mounted at `/data` so SQLite survives redeploys.
+5. Set environment variables:
+
+| Variable | Production example |
+|----------|-------------------|
+| `DJANGO_SECRET_KEY` | Long random string |
+| `DJANGO_DEBUG` | `False` |
+| `DJANGO_ALLOWED_HOSTS` | `your-api.up.railway.app` |
+| `DJANGO_DB_PATH` | `/data/db.sqlite3` (when using a volume) |
+| `CORS_ALLOWED_ORIGINS` | `https://your-app.vercel.app` |
+| `CSRF_TRUSTED_ORIGINS` | `https://your-app.vercel.app` |
+| `FRONTEND_LOGIN_URL` | `https://your-app.vercel.app/login` |
+
+Railway runs migrations and starts Gunicorn via [`backend/Procfile`](backend/Procfile).
+
+Post-deploy (Railway CLI or service shell):
+
+```bash
+railway run python manage.py create_hr --email you@example.com --no-input
+railway run python manage.py seed_employees --count 10000 --clear
+```
+
+Without a volume, the SQLite file is recreated on each deploy—run `migrate` (automatic) and seed again if needed.
+
+### Frontend (Vercel or Netlify)
+
+1. Import the repo; set **Root Directory** to `frontend`.
+2. Build command: `npm run build`; output directory: `dist`.
+3. Set build-time env:
+
+```
+VITE_API_BASE_URL=https://your-api.up.railway.app
+```
+
+Leave `VITE_API_BASE_URL` empty locally so the Vite dev proxy handles `/api`.
+
+SPA routing: [`frontend/vercel.json`](frontend/vercel.json) (Vercel) or [`frontend/public/_redirects`](frontend/public/_redirects) (Netlify).
+
+**Deploy order:** backend → set `VITE_API_BASE_URL` on the frontend host → deploy frontend → set Railway `CORS_ALLOWED_ORIGINS` / `CSRF_TRUSTED_ORIGINS` to the frontend URL → redeploy backend if CORS was a placeholder.
+
+### Smoke test
+
+- `GET https://<api>/api/health/`
+- Log in from the production UI; open `/employees` and `/insights` after seeding.
