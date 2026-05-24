@@ -113,7 +113,7 @@ class SeedEmployeesUtilsTests(TestCase):
         """build_employee sets salary within the selected country range."""
         # GIVEN
         rng = random.Random(5)
-        country_ranges = {country: (minimum, maximum) for country, _, minimum, maximum in COUNTRIES}
+        country_ranges = {country: (minimum, maximum) for country, minimum, maximum in COUNTRIES}
 
         # WHEN
         employee = build_employee(1, ['Test'], ['User'], rng)
