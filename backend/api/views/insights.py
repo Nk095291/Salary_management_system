@@ -1,4 +1,3 @@
-from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -31,13 +30,24 @@ class InsightsByJobTitleView(APIView):
     permission_classes = [IsHRUser]
 
     def get(self, request):
-        country = request.query_params.get('country', '').strip()
-        if not country:
-            return Response(
-                {'country': ['This query parameter is required.']},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return Response(insights.get_by_job_title(country))
+        countries = [
+            value.strip()
+            for value in request.query_params.getlist('countries')
+            if value.strip()
+        ]
+        departments = [
+            value.strip()
+            for value in request.query_params.getlist('departments')
+            if value.strip()
+        ]
+        job_titles = [
+            value.strip()
+            for value in request.query_params.getlist('job_titles')
+            if value.strip()
+        ]
+        return Response(
+            insights.get_by_job_title(countries, departments, job_titles),
+        )
 
 
 class InsightsPayEquityView(APIView):

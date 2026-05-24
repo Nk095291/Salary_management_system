@@ -19,8 +19,16 @@ def _median(values: list) -> float:
     return float(statistics.median(values)) if values else 0.0
 
 
-def _gender_bucket(gender: str) -> str:
-    return gender if gender in (Gender.MALE, Gender.FEMALE) else 'Other'
+GENDER_ORDER = (
+    Gender.MALE,
+    Gender.FEMALE,
+    Gender.NON_BINARY,
+    Gender.PREFER_NOT_TO_SAY,
+)
+
+
+def _empty_gender_distribution() -> dict[str, int]:
+    return {gender: 0 for gender in GENDER_ORDER}
 
 
 def get_overview() -> dict:
@@ -31,7 +39,7 @@ def get_overview() -> dict:
             'total_employees': 0,
             'avg_salary': 0,
             'highest_paid_country': None,
-            'gender_distribution': {'Male': 0, 'Female': 0, 'Other': 0},
+            'gender_distribution': _empty_gender_distribution(),
         }
 
     # Single query for avg + gender breakdown
@@ -48,14 +56,14 @@ def get_overview() -> dict:
     highest_paid_country = highest['country'] if highest else None
 
     # Single query for gender distribution
-    gender_counts = {'Male': 0, 'Female': 0, 'Other': 0}
+    gender_counts = _empty_gender_distribution()
     for row in qs.values('gender').annotate(c=Count('id')):
-        bucket = _gender_bucket(row['gender'])
-        gender_counts[bucket] += row['c']
+        if row['gender'] in gender_counts:
+            gender_counts[row['gender']] += row['c']
 
     gender_distribution = {
-        key: round(gender_counts[key] / total * 100)
-        for key in ('Male', 'Female', 'Other')
+        gender: round(gender_counts[gender] / total * 100)
+        for gender in GENDER_ORDER
     }
     remainder = 100 - sum(gender_distribution.values())
     if remainder:
@@ -126,8 +134,18 @@ def get_by_department() -> list[dict]:
     ]
 
 
-def get_by_job_title(country: str) -> list[dict]:
-    qs = active_employees().filter(country=country)
+def get_by_job_title(
+    countries: list[str] | None = None,
+    departments: list[str] | None = None,
+    job_titles: list[str] | None = None,
+) -> list[dict]:
+    qs = active_employees()
+    if countries:
+        qs = qs.filter(country__in=countries)
+    if departments:
+        qs = qs.filter(department__in=departments)
+    if job_titles:
+        qs = qs.filter(job_title__in=job_titles)
 
     # Single query: group by job_title + seniority_level together
     rows = (
@@ -163,6 +181,10 @@ def get_by_job_title(country: str) -> list[dict]:
     )
 
 
+def _empty_gender_averages() -> dict[str, float]:
+    return {gender: 0.0 for gender in GENDER_ORDER}
+
+
 def get_pay_equity() -> list[dict]:
     # Single query: group by department + gender together
     rows = (
@@ -173,23 +195,24 @@ def get_pay_equity() -> list[dict]:
     )
 
     # Collapse in Python
-    dept_map = defaultdict(lambda: {'male_avg': 0.0, 'female_avg': 0.0})
+    dept_map = defaultdict(_empty_gender_averages)
+
     for row in rows:
         dept = row['department']
-        avg = _decimal(row['avg_salary'])
-        if row['gender'] == Gender.MALE:
-            dept_map[dept]['male_avg'] = avg
-        elif row['gender'] == Gender.FEMALE:
-            dept_map[dept]['female_avg'] = avg
+        gender = row['gender']
+        if gender in GENDER_ORDER:
+            dept_map[dept][gender] = _decimal(row['avg_salary'])
 
     results = []
     for dept, vals in sorted(dept_map.items()):
-        male_val, female_val = vals['male_avg'], vals['female_avg']
+        male_val, female_val = vals[Gender.MALE], vals[Gender.FEMALE]
         gap = round((male_val - female_val) / male_val * 100, 1) if male_val > 0 else 0.0
         results.append({
             'department': dept,
-            'male_avg': round(male_val, 2),
-            'female_avg': round(female_val, 2),
+            'male_avg': round(vals[Gender.MALE], 2),
+            'female_avg': round(vals[Gender.FEMALE], 2),
+            'non_binary_avg': round(vals[Gender.NON_BINARY], 2),
+            'prefer_not_to_say_avg': round(vals[Gender.PREFER_NOT_TO_SAY], 2),
             'gap_percent': gap,
         })
     return results

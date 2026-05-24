@@ -19,10 +19,34 @@ export function getInsightsByDepartment(): Promise<DepartmentInsight[]> {
   return apiRequest<DepartmentInsight[]>('/api/insights/by-department/');
 }
 
-export function getInsightsByJobTitle(country: string): Promise<JobTitleInsight[]> {
-  const params = new URLSearchParams({ country });
+export interface JobTitleInsightsFilters {
+  countries?: string[];
+  departments?: string[];
+  job_titles?: string[];
+}
+
+export function getInsightsByJobTitle(
+  filters: JobTitleInsightsFilters = {},
+): Promise<JobTitleInsight[]> {
+  const params = new URLSearchParams();
+  if (filters.countries) {
+    for (const country of filters.countries) {
+      params.append('countries', country);
+    }
+  }
+  if (filters.departments) {
+    for (const department of filters.departments) {
+      params.append('departments', department);
+    }
+  }
+  if (filters.job_titles) {
+    for (const jobTitle of filters.job_titles) {
+      params.append('job_titles', jobTitle);
+    }
+  }
+  const qs = params.toString();
   return apiRequest<JobTitleInsight[]>(
-    `/api/insights/by-job-title/?${params.toString()}`,
+    qs ? `/api/insights/by-job-title/?${qs}` : '/api/insights/by-job-title/',
   );
 }
 

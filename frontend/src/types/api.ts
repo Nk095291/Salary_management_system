@@ -145,5 +145,7 @@ export interface PayEquityInsight {
   department: string;
   male_avg: number;
   female_avg: number;
+  non_binary_avg: number;
+  prefer_not_to_say_avg: number;
   gap_percent: number;
 }
