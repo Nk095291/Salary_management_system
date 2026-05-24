@@ -215,6 +215,8 @@ erDiagram
 
 6. **Backend-focused testing** — Frontend has no automated test suite; API contract is documented in [frontend/docs/API.md](frontend/docs/API.md).
 
+7. **Desktop-only UI** — The frontend is laid out for desktop/window viewports only. It is not responsive for phone or small mobile screens; tables, navigation, and insight charts assume a wide screen. A production rollout would need responsive breakpoints and touch-friendly layouts.
+
 ---
 
 ## Trade-off Explanations
