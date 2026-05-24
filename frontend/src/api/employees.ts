@@ -1,5 +1,6 @@
 import { apiRequest } from './client';
 import type {
+  DepartmentOption,
   Employee,
   EmployeePayload,
   PaginatedResponse,
@@ -36,8 +37,8 @@ export async function listEmployees(
   return apiRequest<PaginatedResponse<Employee>>(path);
 }
 
-export async function getDepartments(): Promise<string[]> {
-  return apiRequest<string[]>('/api/employees/departments/');
+export async function getDepartments(): Promise<DepartmentOption[]> {
+  return apiRequest<DepartmentOption[]>('/api/employees/departments/');
 }
 
 export async function getCountries(): Promise<string[]> {

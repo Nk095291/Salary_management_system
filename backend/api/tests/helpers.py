@@ -1,10 +1,15 @@
 from django.urls import reverse
 
-from api.tests.factory.models.hr_user import HRUserFactory
+from api.models import HRUser
 
 
 def auth_as_hr(client, email='hr@company.com', password='testpass123'):
-    HRUserFactory.create(email=email, password=password)
+    HRUser.objects.create_user(
+        email=email,
+        password=password,
+        first_name='HR',
+        last_name='User',
+    )
     response = client.post(
         reverse('token_obtain_pair'),
         {'email': email, 'password': password},

@@ -9,6 +9,7 @@ import {
 } from '../api/employees';
 import { CountryLabel } from '../components/CountryLabel';
 import { EmployeeForm } from '../components/EmployeeForm';
+import { Modal } from '../components/Modal';
 import { MultiSelect } from '../components/MultiSelect';
 import type { Employee } from '../types/api';
 import { EMPLOYEE_STATUSES } from '../types/api';
@@ -74,6 +75,8 @@ export function EmployeesPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<'create' | 'edit'>('create');
   const [editing, setEditing] = useState<Employee | null>(null);
+  const [deletingEmployee, setDeletingEmployee] = useState<Employee | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   useEffect(() => {
     async function loadOptions() {
@@ -82,7 +85,7 @@ export function EmployeesPage() {
           getDepartments(),
           getCountries(),
         ]);
-        setDepartmentOptions(depts);
+        setDepartmentOptions(depts.map((d) => d.name));
         setCountryOptions(countries);
       } catch {
         // Filters still work if options fail; user can retry via refresh
@@ -157,15 +160,23 @@ export function EmployeesPage() {
     setEditing(null);
   }
 
-  async function handleDelete(employee: Employee) {
-    if (!window.confirm(`Delete #${employee.id} (${employee.first_name} ${employee.last_name})?`)) {
-      return;
-    }
+  function closeDeleteConfirm() {
+    if (deleteSubmitting) return;
+    setDeletingEmployee(null);
+  }
+
+  async function confirmDelete() {
+    if (!deletingEmployee) return;
+    setDeleteSubmitting(true);
+    setError('');
     try {
-      await deleteEmployee(employee.id);
+      await deleteEmployee(deletingEmployee.id);
+      setDeletingEmployee(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed.');
+    } finally {
+      setDeleteSubmitting(false);
     }
   }
 
@@ -226,8 +237,10 @@ export function EmployeesPage() {
       {error && <p className="error">{error}</p>}
 
       {panelOpen && (
-        <div className="card panel">
-          <h3>{panelMode === 'create' ? 'Add employee' : 'Edit employee'}</h3>
+        <Modal
+          title={panelMode === 'create' ? 'Add employee' : 'Edit employee'}
+          onClose={closePanel}
+        >
           <EmployeeForm
             mode={panelMode}
             initial={editing}
@@ -242,7 +255,38 @@ export function EmployeesPage() {
               await load();
             }}
           />
-        </div>
+        </Modal>
+      )}
+
+      {deletingEmployee && (
+        <Modal title="Delete employee" onClose={closeDeleteConfirm} className="modal-confirm">
+          <p className="confirm-message">
+            Are you sure you want to delete{' '}
+            <strong>
+              #{deletingEmployee.id} {deletingEmployee.first_name}{' '}
+              {deletingEmployee.last_name}
+            </strong>
+            ? This action cannot be undone.
+          </p>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={closeDeleteConfirm}
+              disabled={deleteSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={confirmDelete}
+              disabled={deleteSubmitting}
+            >
+              {deleteSubmitting ? 'Deleting…' : 'Delete employee'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       <div className="table-wrap card">
@@ -293,7 +337,7 @@ export function EmployeesPage() {
                     <button
                       type="button"
                       className="btn btn-sm btn-danger"
-                      onClick={() => handleDelete(emp)}
+                      onClick={() => setDeletingEmployee(emp)}
                     >
                       Delete
                     </button>

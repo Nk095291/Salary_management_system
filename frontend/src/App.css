@@ -109,6 +109,60 @@
   margin-bottom: 0.5rem;
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2rem 1rem;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.modal {
+  width: 100%;
+  max-width: 720px;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.25rem 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-close {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+}
+
+.modal-body {
+  padding: 1rem 1.25rem 1.25rem;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+}
+
+.modal-confirm {
+  max-width: 420px;
+}
+
+.confirm-message {
+  margin: 0 0 1.25rem;
+  line-height: 1.5;
+}
+
 .btn {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);

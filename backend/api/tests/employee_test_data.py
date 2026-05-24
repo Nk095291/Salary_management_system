@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from faker import Faker
 
-from api.constants import COUNTRY_NAMES
+from api.constants import COUNTRY_NAMES, JOB_TITLES_BY_DEPARTMENT
 from api.models import EmploymentType, Gender, SeniorityLevel, EmployeeStatus
 
 fake = Faker()
@@ -54,7 +54,7 @@ def valid_employee_payload(**overrides):
         'company_email': f'company.{suffix}@example.com',
         'gender': random_choice_value(Gender),
         'department': 'Engineering',
-        'job_title': fake.job(),
+        'job_title': random.choice(JOB_TITLES_BY_DEPARTMENT['Engineering']),
         'seniority_level': random_choice_value(SeniorityLevel),
         'employment_type': random_choice_value(EmploymentType),
         'country': random_country(),

@@ -6,8 +6,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from api.models import Employee, EmployeeStatus, Gender
-from api.constants import COUNTRY_NAMES, DEPARTMENTS
+from api.models import Employee, EmployeeStatus, EmploymentType, Gender, SeniorityLevel
+from api.constants import COUNTRY_NAMES, DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT
 from api.tests.employee_test_data import (
     distinct_choice_values,
     distinct_countries,
@@ -37,6 +37,12 @@ class EmployeeViewSetTests(APITestCase):
     - Departments and countries actions return distinct sorted values.
     - Filter with no matches returns empty results.
     - Valid payload creates employee with database id.
+    - Duplicate personal_email on create returns 400 with user-friendly message.
+    - Duplicate company_email on create returns 400 with user-friendly message.
+    - Negative salary on create returns 400 with user-friendly message.
+    - Invalid department, job title, country, seniority level, or employment type
+      on create returns 400 with user-friendly message.
+    - Missing date_joining on create returns 400 bad request.
     - Missing required field returns 400 bad request.
     - Present field with invalid value returns 400 bad request.
     - Existing pk retrieve returns employee details.
@@ -276,17 +282,24 @@ class EmployeeViewSetTests(APITestCase):
         self.assertEqual(result_ids, {emp_a.id, emp_b.id})
 
     def test_EmployeeViewSet__departments_action__returns_constant_list(self):
-        """Departments action returns the canonical sorted department list."""
+        """Departments action returns departments with their job titles."""
         # GIVEN
         auth_as_hr(self.client)
         url = reverse('employee-departments')
+        expected = [
+            {
+                'name': department,
+                'job_titles': JOB_TITLES_BY_DEPARTMENT[department],
+            }
+            for department in DEPARTMENTS
+        ]
 
         # WHEN
         response = self.client.get(url)
 
         # THEN
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(list(response.data), DEPARTMENTS)
+        self.assertEqual(list(response.data), expected)
 
     def test_EmployeeViewSet__countries_action__returns_constant_list(self):
         """Countries action returns the canonical sorted country list."""
@@ -411,6 +424,46 @@ class EmployeeViewSetTests(APITestCase):
             Employee.objects.filter(company_email=payload['company_email']).exists()
         )
 
+    def test_EmployeeViewSet__duplicate_personal_email__returns_400(self):
+        """Duplicate personal_email on create returns 400 with user-friendly message."""
+        # GIVEN
+        existing = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        payload = valid_employee_payload(personal_email=existing.personal_email)
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('personal_email', response.data)
+        self.assertEqual(
+            response.data['personal_email'][0],
+            'An employee with this personal email already exists.',
+        )
+        self.assertEqual(Employee.objects.filter(personal_email=existing.personal_email).count(), 1)
+
+    def test_EmployeeViewSet__duplicate_company_email__returns_400(self):
+        """Duplicate company_email on create returns 400 with user-friendly message."""
+        # GIVEN
+        existing = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        payload = valid_employee_payload(company_email=existing.company_email)
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('company_email', response.data)
+        self.assertEqual(
+            response.data['company_email'][0],
+            'An employee with this company email already exists.',
+        )
+        self.assertEqual(Employee.objects.filter(company_email=existing.company_email).count(), 1)
+
     def test_EmployeeViewSet__missing_required_field__returns_400(self):
         """Missing required field returns 400 bad request."""
         # GIVEN
@@ -487,6 +540,114 @@ class EmployeeViewSetTests(APITestCase):
         # THEN
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('salary', response.data)
+        self.assertEqual(
+            response.data['salary'][0],
+            'Salary must be zero or greater.',
+        )
+
+    def test_EmployeeViewSet__invalid_department__returns_400(self):
+        """Present department not in allowed list returns 400 bad request."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        invalid_department = unique_label('dept')
+        payload = valid_employee_payload(department=invalid_department)
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('department', response.data)
+        self.assertIn(invalid_department, response.data['department'][0])
+        self.assertIn('allowed departments', response.data['department'][0].lower())
+
+    def test_EmployeeViewSet__invalid_job_title__returns_400(self):
+        """Present job title not valid for department returns 400 bad request."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        invalid_job_title = unique_label('title')
+        payload = valid_employee_payload(
+            department='Engineering',
+            job_title=invalid_job_title,
+        )
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('job_title', response.data)
+        self.assertIn(invalid_job_title, response.data['job_title'][0])
+        self.assertIn('Engineering', response.data['job_title'][0])
+
+    def test_EmployeeViewSet__invalid_country__returns_400(self):
+        """Present country not in allowed list returns 400 bad request."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        invalid_country = unique_label('country')
+        payload = valid_employee_payload(country=invalid_country)
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('country', response.data)
+        self.assertIn(invalid_country, response.data['country'][0])
+        self.assertIn('allowed countries', response.data['country'][0].lower())
+
+    def test_EmployeeViewSet__invalid_seniority_level__returns_400(self):
+        """Present seniority_level with invalid choice returns 400 bad request."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        payload = valid_employee_payload(
+            seniority_level=invalid_choice_value(SeniorityLevel.values),
+        )
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('seniority_level', response.data)
+        self.assertIn('valid choice', response.data['seniority_level'][0].lower())
+
+    def test_EmployeeViewSet__invalid_employment_type__returns_400(self):
+        """Present employment_type with invalid choice returns 400 bad request."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        payload = valid_employee_payload(
+            employment_type=invalid_choice_value(EmploymentType.values),
+        )
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('employment_type', response.data)
+        self.assertIn('valid choice', response.data['employment_type'][0].lower())
+
+    def test_EmployeeViewSet__missing_date_joining__returns_400(self):
+        """Missing date_joining on create returns 400 bad request."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        payload = valid_employee_payload()
+        del payload['date_joining']
+
+        # WHEN
+        response = self.client.post(url, payload, format='json')
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('date_joining', response.data)
+        self.assertIn('required', response.data['date_joining'][0].lower())
 
     def test_EmployeeViewSet__currency_is_always_usd__ignores_client_value(self):
         """Currency field is read-only; employee is created with USD regardless of payload."""
@@ -535,8 +696,8 @@ class EmployeeViewSetTests(APITestCase):
         # GIVEN
         original_salary = Decimal(f'{random.randint(40_000, 80_000)}.00')
         updated_salary = Decimal(f'{random.randint(81_000, 150_000)}.00')
-        updated_job_title = fake.job()
         employee = EmployeeFactory.create(salary=original_salary)
+        updated_job_title = random.choice(JOB_TITLES_BY_DEPARTMENT[employee.department])
         auth_as_hr(self.client)
         url = reverse('employee-detail', kwargs={'pk': employee.pk})
 

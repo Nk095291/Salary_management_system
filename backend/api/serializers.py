@@ -1,7 +1,9 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from api.constants import COUNTRY_NAMES
+from api.constants import COUNTRY_NAMES, DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT
 
 from .models import Currency, Employee, EmployeeStatus, HRUser
 
@@ -18,6 +20,12 @@ class EmployeeSerializer(serializers.ModelSerializer):
     # TODO: Multi-currency — when local-currency support is added, remove
     #       read_only and let the client supply a validated currency code.
     currency = serializers.CharField(read_only=True)
+    salary = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        error_messages={'min_value': 'Salary must be zero or greater.'},
+    )
 
     class Meta:
         model = Employee
@@ -42,6 +50,38 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+        extra_kwargs = {
+            'personal_email': {'validators': []},
+            'company_email': {'validators': []},
+        }
+
+    def validate_personal_email(self, value: str) -> str:
+        queryset = Employee.objects.filter(personal_email=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(
+                'An employee with this personal email already exists.'
+            )
+        return value
+
+    def validate_company_email(self, value: str) -> str:
+        queryset = Employee.objects.filter(company_email=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(
+                'An employee with this company email already exists.'
+            )
+        return value
+
+    def validate_department(self, value: str) -> str:
+        if value not in DEPARTMENTS:
+            raise serializers.ValidationError(
+                f'"{value}" is not in the list of allowed departments. '
+                f'Allowed: {", ".join(DEPARTMENTS)}'
+            )
+        return value
 
     def validate_country(self, value: str) -> str:
         if value not in COUNTRY_NAMES:
@@ -87,6 +127,30 @@ class EmployeeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {
                     'relieving date': 'Must be on or after the date of joining.',
+                }
+            )
+
+        department = attrs.get(
+            'department',
+            self.instance.department if self.instance else None,
+        )
+        job_title = attrs.get(
+            'job_title',
+            self.instance.job_title if self.instance else None,
+        )
+        if (
+            department
+            and job_title
+            and department in JOB_TITLES_BY_DEPARTMENT
+            and job_title not in JOB_TITLES_BY_DEPARTMENT[department]
+        ):
+            allowed_titles = ', '.join(JOB_TITLES_BY_DEPARTMENT[department])
+            raise serializers.ValidationError(
+                {
+                    'job_title': (
+                        f'"{job_title}" is not a valid job title for {department}. '
+                        f'Allowed: {allowed_titles}'
+                    ),
                 }
             )
 

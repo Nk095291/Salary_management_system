@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
-from api.constants import COUNTRY_NAMES, DEPARTMENTS
+from api.constants import COUNTRY_NAMES, DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT
 from api.models import Employee
 from api.permissions import IsHRUser
 from api.serializers import EmployeeSerializer
@@ -37,8 +37,16 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='departments')
     def departments(self, request):
-        """Return the canonical list of allowed departments."""
-        return Response(DEPARTMENTS)
+        """Return departments with their allowed job titles."""
+        return Response(
+            [
+                {
+                    'name': department,
+                    'job_titles': JOB_TITLES_BY_DEPARTMENT[department],
+                }
+                for department in DEPARTMENTS
+            ]
+        )
 
     @action(detail=False, methods=['get'], url_path='countries')
     def countries(self, request):

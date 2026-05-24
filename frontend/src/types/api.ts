@@ -41,6 +41,11 @@ export const ALLOWED_COUNTRIES = [
 
 export type AllowedCountry = (typeof ALLOWED_COUNTRIES)[number];
 
+export interface DepartmentOption {
+  name: string;
+  job_titles: string[];
+}
+
 export type Gender = (typeof GENDERS)[number];
 export type SeniorityLevel = (typeof SENIORITY_LEVELS)[number];
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
