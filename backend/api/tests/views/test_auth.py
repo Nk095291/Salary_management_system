@@ -83,6 +83,6 @@ class MeViewTests(APITestCase):
         self.assertEqual(response.data['email'], user.email)
         self.assertIsNotNone(response.data['employee'])
         self.assertEqual(
-            response.data['employee']['employee_id'],
-            user.employee.employee_id,
+            response.data['employee']['id'],
+            user.employee.id,
         )

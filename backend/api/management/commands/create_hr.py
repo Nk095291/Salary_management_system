@@ -22,9 +22,9 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--email', type=str, help='HR login email (company email).')
         parser.add_argument(
-            '--employee-id',
-            type=str,
-            help='Link an existing employee by employee_id instead of creating one.',
+            '--employee-pk',
+            type=int,
+            help='Link an existing employee by primary key instead of creating one.',
         )
         parser.add_argument(
             '--no-input',
@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         email = options.get('email')
-        employee_id = options.get('employee_id')
+        employee_pk = options.get('employee_pk')
         no_input = options.get('no_input')
 
         if not email:
@@ -50,13 +50,15 @@ class Command(BaseCommand):
 
         password = secrets.token_urlsafe(16)
 
-        if employee_id:
+        if employee_pk:
             try:
-                employee = Employee.objects.get(employee_id=employee_id)
+                employee = Employee.objects.get(pk=employee_pk)
             except Employee.DoesNotExist as exc:
-                raise CommandError(f'Employee {employee_id} not found.') from exc
+                raise CommandError(f'Employee {employee_pk} not found.') from exc
             if hasattr(employee, 'hr_user') and employee.hr_user is not None:
-                raise CommandError(f'Employee {employee_id} is already linked to an HR user.')
+                raise CommandError(
+                    f'Employee {employee_pk} is already linked to an HR user.'
+                )
         else:
             personal_email = f'hr.{email.replace("@", "_")}@internal.local'
             suffix = 1

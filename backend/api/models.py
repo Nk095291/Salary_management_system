@@ -44,7 +44,6 @@ class Currency(models.TextChoices):
 
 
 class Employee(models.Model):
-    employee_id = models.CharField(max_length=20, unique=True, editable=False, blank=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     personal_email = models.EmailField(unique=True)
@@ -73,7 +72,7 @@ class Employee(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['employee_id']
+        ordering = ['id']
         indexes = [
             models.Index(fields=['country', 'job_title']),
         ]
@@ -85,7 +84,7 @@ class Employee(models.Model):
             ),
         ]
     def __str__(self):
-        return f'{self.employee_id} - {self.first_name} {self.last_name}'
+        return f'{self.pk} - {self.first_name} {self.last_name}'
 
     def clean(self):
         super().clean()
@@ -100,12 +99,8 @@ class Employee(models.Model):
     
 
     def save(self, *args, **kwargs):
-        is_new = self.pk is None
         self.full_clean()
         super().save(*args, **kwargs)
-        if is_new and not self.employee_id:
-            self.employee_id = f'EMP-{self.pk:05d}'
-            super().save(update_fields=['employee_id'])
 
 
 class HRUserManager(BaseUserManager):

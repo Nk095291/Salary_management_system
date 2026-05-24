@@ -98,8 +98,8 @@ export function EmployeeForm({
     <form className="form form-grid" onSubmit={handleSubmit}>
       {mode === 'edit' && initial && (
         <label className="full-width">
-          Employee ID
-          <input type="text" value={initial.employee_id} readOnly disabled />
+          ID
+          <input type="text" value={String(initial.id)} readOnly disabled />
         </label>
       )}
       <label>

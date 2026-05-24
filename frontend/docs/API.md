@@ -84,7 +84,7 @@ Store tokens after login:
   "first_name": "HR",
   "last_name": "Manager",
   "employee": {
-    "employee_id": "EMP-00001",
+    "id": 1,
     "job_title": "HR Manager",
     "department": "Human Resources",
     "country": "United States"
@@ -124,7 +124,6 @@ All employee endpoints require HR JWT authentication.
   "results": [
     {
       "id": 1,
-      "employee_id": "EMP-00001",
       "first_name": "Jane",
       "last_name": "Doe",
       "personal_email": "jane.personal@example.com",
@@ -158,7 +157,7 @@ All employee endpoints require HR JWT authentication.
 
 `POST /api/employees/`
 
-**Request** — omit `employee_id`, `created_at`, `updated_at` (server-generated).
+**Request** — omit `id`, `created_at`, `updated_at` (server assigns `id`).
 
 ```json
 {
@@ -181,13 +180,13 @@ All employee endpoints require HR JWT authentication.
 }
 ```
 
-**Response** `201` — created `Employee` including `employee_id`.
+**Response** `201` — created `Employee` including database `id`.
 
 ### Update employee
 
 `PATCH /api/employees/{id}/`
 
-Partial update; `employee_id` is read-only.
+Partial update; `id` is not writable.
 
 **Response** `200` — updated `Employee`.
 
@@ -205,7 +204,7 @@ See [`src/types/api.ts`](../src/types/api.ts) for interfaces used in the app.
 
 ```typescript
 interface EmployeeSummary {
-  employee_id: string;
+  id: number;
   job_title: string;
   department: string;
   country: string;

@@ -40,13 +40,19 @@ class EmployeeModelTests(TestCase):
     Tests for Employee model save/validation.
 
     Covered cases:
-    - Creating an employee assigns the first employee_id as EMP-00001.
+    - Creating an employee assigns a database primary key.
     - Duplicate personal_email raises validation error.
     - date_relieving before date_joining fails validation.
     """
 
-    def test_Employee__first_record__assigns_employee_id_emp_00001(self):
-        """Creating an employee assigns the first employee_id as EMP-00001."""
+    TEST_CASES = [
+        'Creating an employee assigns a database primary key.',
+        'Duplicate personal_email raises validation error.',
+        'date_relieving before date_joining fails validation.',
+    ]
+
+    def test_Employee__first_record__assigns_primary_key(self):
+        """Creating an employee assigns a database primary key."""
         # GIVEN
         data = _employee_kwargs()
 
@@ -54,7 +60,7 @@ class EmployeeModelTests(TestCase):
         employee = Employee.objects.create(**data)
 
         # THEN
-        self.assertEqual(employee.employee_id, 'EMP-00001')
+        self.assertIsNotNone(employee.pk)
 
     def test_Employee__duplicate_personal_email__raises_validation_error(self):
         """Duplicate personal_email raises validation error."""

@@ -19,7 +19,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     lookup_field = 'pk'
 
     def get_queryset(self):
-        queryset = Employee.objects.all().order_by('employee_id')
+        queryset = Employee.objects.all().order_by('id')
         department = self.request.query_params.get('department')
         country = self.request.query_params.get('country')
         status = self.request.query_params.get('status')

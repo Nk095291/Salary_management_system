@@ -26,7 +26,7 @@ class EmployeeViewSetTests(APITestCase):
     - Authenticated HR user list returns paginated employees.
     - List filters by department, country, and status query params.
     - Filter with no matches returns empty results.
-    - Valid payload creates employee with employee_id.
+    - Valid payload creates employee with database id.
     - Missing required field returns 400 bad request.
     - Present field with invalid value returns 400 bad request.
     - Existing pk retrieve returns employee details.
@@ -141,7 +141,7 @@ class EmployeeViewSetTests(APITestCase):
         self.assertEqual(response.data['results'], [])
 
     def test_EmployeeViewSet__valid_payload__creates_employee(self):
-        """Valid payload creates employee with employee_id."""
+        """Valid payload creates employee with database id."""
         # GIVEN
         auth_as_hr(self.client)
         url = reverse('employee-list')
@@ -152,7 +152,7 @@ class EmployeeViewSetTests(APITestCase):
 
         # THEN
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(response.data['employee_id'].startswith('EMP-'))
+        self.assertIsNotNone(response.data['id'])
         self.assertEqual(response.data['first_name'], payload['first_name'])
         self.assertTrue(
             Employee.objects.filter(company_email=payload['company_email']).exists()
@@ -264,7 +264,7 @@ class EmployeeViewSetTests(APITestCase):
         # THEN
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['first_name'], employee.first_name)
-        self.assertEqual(response.data['employee_id'], employee.employee_id)
+        self.assertEqual(response.data['id'], employee.id)
 
     def test_EmployeeViewSet__patch_payload__updates_employee(self):
         """Patch payload updates employee fields."""

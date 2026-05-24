@@ -7,11 +7,10 @@ from .models import Employee, HRUser
 class EmployeeSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
-        fields = ['employee_id', 'job_title', 'department', 'country']
+        fields = ['id', 'job_title', 'department', 'country']
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    employee_id = serializers.CharField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
@@ -19,7 +18,6 @@ class EmployeeSerializer(serializers.ModelSerializer):
         model = Employee
         fields = [
             'id',
-            'employee_id',
             'first_name',
             'last_name',
             'personal_email',
@@ -46,7 +44,6 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return employee
 
     def update(self, instance, validated_data):
-        validated_data.pop('employee_id', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

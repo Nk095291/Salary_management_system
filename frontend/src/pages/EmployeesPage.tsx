@@ -104,7 +104,7 @@ export function EmployeesPage() {
   }
 
   async function handleDelete(employee: Employee) {
-    if (!window.confirm(`Delete ${employee.employee_id} (${employee.first_name} ${employee.last_name})?`)) {
+    if (!window.confirm(`Delete #${employee.id} (${employee.first_name} ${employee.last_name})?`)) {
       return;
     }
     try {
@@ -215,7 +215,7 @@ export function EmployeesPage() {
             <tbody>
               {employees.map((emp) => (
                 <tr key={emp.id}>
-                  <td>{emp.employee_id}</td>
+                  <td>{emp.id}</td>
                   <td>
                     {emp.first_name} {emp.last_name}
                   </td>

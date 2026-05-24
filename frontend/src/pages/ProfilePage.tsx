@@ -32,7 +32,7 @@ export function ProfilePage() {
           <dl className="detail-list">
             <div>
               <dt>Employee ID</dt>
-              <dd>{user.employee.employee_id}</dd>
+              <dd>{user.employee.id}</dd>
             </div>
             <div>
               <dt>Job title</dt>

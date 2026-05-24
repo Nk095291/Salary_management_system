@@ -7,7 +7,7 @@ from .models import Employee, HRUser
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     list_display = [
-        'employee_id',
+        'id',
         'first_name',
         'last_name',
         'department',
@@ -16,8 +16,8 @@ class EmployeeAdmin(admin.ModelAdmin):
         'status',
     ]
     list_filter = ['status', 'department', 'country', 'seniority_level']
-    search_fields = ['employee_id', 'first_name', 'last_name', 'company_email']
-    readonly_fields = ['employee_id', 'created_at', 'updated_at']
+    search_fields = ['id', 'first_name', 'last_name', 'company_email']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(HRUser)

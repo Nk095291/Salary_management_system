@@ -48,6 +48,15 @@ Employee CRUD (requires `Authorization: Bearer <access>` from an HR user):
 
 `create_hr` prompts for email, generates a password, emails credentials, and prints the password in the console when `DEBUG=True`.
 
+Seed employees (10,000 by default; names from `backend/data/first_names.txt` and `backend/data/last_names.txt`):
+
+```powershell
+python manage.py seed_employees
+python manage.py seed_employees --count 10000 --clear
+```
+
+Employees are identified by numeric database `id` in the API and UI (`/api/employees/{id}/`). Use `--employee-pk` with `create_hr` to link an existing employee record.
+
 ## Frontend setup
 
 ```powershell

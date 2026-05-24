@@ -35,7 +35,7 @@ export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
 export type Currency = (typeof CURRENCIES)[number];
 
 export interface EmployeeSummary {
-  employee_id: string;
+  id: number;
   job_title: string;
   department: string;
   country: string;
@@ -51,7 +51,6 @@ export interface HRUser {
 
 export interface Employee {
   id: number;
-  employee_id: string;
   first_name: string;
   last_name: string;
   personal_email: string;
@@ -74,7 +73,7 @@ export interface Employee {
 
 export type EmployeePayload = Omit<
   Employee,
-  'id' | 'employee_id' | 'created_at' | 'updated_at'
+  'id' | 'created_at' | 'updated_at'
 >;
 
 export interface PaginatedResponse<T> {
