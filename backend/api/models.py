@@ -5,6 +5,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from api.constants import COUNTRY_NAMES
+
 
 class Gender(models.TextChoices):
     MALE = 'Male', 'Male'
@@ -59,7 +61,11 @@ class Employee(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0'))],
     )
-    currency = models.CharField(max_length=3, choices=Currency.choices)
+    # TODO: Multi-currency — when adding support for storing salaries in local
+    #       currencies, remove the default, expose currency in the API/form,
+    #       and add a normalisation step in insights aggregation so all salary
+    #       comparisons convert to a common base currency (e.g. USD) first.
+    currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.USD)
     date_joining = models.DateField()
     date_relieving = models.DateField(null=True, blank=True)
     status = models.CharField(
@@ -87,6 +93,10 @@ class Employee(models.Model):
 
     def clean(self):
         super().clean()
+        if self.country and self.country not in COUNTRY_NAMES:
+            raise ValidationError(
+                {'country': f'"{self.country}" is not in the list of allowed countries.'}
+            )
         if (
             self.date_relieving
             and self.date_joining

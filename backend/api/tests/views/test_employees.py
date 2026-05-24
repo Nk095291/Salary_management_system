@@ -5,9 +5,11 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from api.models import Currency, Employee, EmployeeStatus, Gender
+from api.models import Employee, EmployeeStatus, Gender
+from api.constants import COUNTRY_NAMES, DEPARTMENTS
 from api.tests.employee_test_data import (
     distinct_choice_values,
+    distinct_countries,
     fake,
     invalid_choice_value,
     unique_label,
@@ -25,6 +27,8 @@ class EmployeeViewSetTests(APITestCase):
     - Unauthenticated list request returns 401 unauthorized.
     - Authenticated HR user list returns paginated employees.
     - List filters by department, country, and status query params.
+    - List filters by multiple departments or countries (OR within each dimension).
+    - Departments and countries actions return distinct sorted values.
     - Filter with no matches returns empty results.
     - Valid payload creates employee with database id.
     - Missing required field returns 400 bad request.
@@ -72,7 +76,7 @@ class EmployeeViewSetTests(APITestCase):
         url = reverse('employee-list')
 
         # WHEN
-        response = self.client.get(url, {'department': matched_department})
+        response = self.client.get(url, {'departments': matched_department})
 
         # THEN
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -85,17 +89,14 @@ class EmployeeViewSetTests(APITestCase):
     def test_EmployeeViewSet__filter_by_country__returns_matching_only(self):
         """List filtered by country returns only employees in that country."""
         # GIVEN
-        matched_country = fake.country()
-        other_country = fake.country()
-        while other_country == matched_country:
-            other_country = fake.country()
+        matched_country, other_country = distinct_countries(2)
         matched = EmployeeFactory.create(country=matched_country)
         EmployeeFactory.create(country=other_country)
         auth_as_hr(self.client)
         url = reverse('employee-list')
 
         # WHEN
-        response = self.client.get(url, {'country': matched_country})
+        response = self.client.get(url, {'countries': matched_country})
 
         # THEN
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -104,6 +105,76 @@ class EmployeeViewSetTests(APITestCase):
         self.assertTrue(
             all(item['country'] == matched_country for item in response.data['results'])
         )
+
+    def test_EmployeeViewSet__filter_by_multiple_departments__returns_union(self):
+        """List filtered by multiple departments returns employees in any of them."""
+        # GIVEN
+        dept_a = unique_label('dept')
+        dept_b = unique_label('dept')
+        dept_other = unique_label('dept')
+        emp_a = EmployeeFactory.create(department=dept_a)
+        emp_b = EmployeeFactory.create(department=dept_b)
+        EmployeeFactory.create(department=dept_other)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(
+            url,
+            [('departments', dept_a), ('departments', dept_b)],
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = {item['id'] for item in response.data['results']}
+        self.assertEqual(result_ids, {emp_a.id, emp_b.id})
+
+    def test_EmployeeViewSet__filter_by_multiple_countries__returns_union(self):
+        """List filtered by multiple countries returns employees in any of them."""
+        # GIVEN
+        country_a, country_b, country_other = distinct_countries(3)
+        emp_a = EmployeeFactory.create(country=country_a)
+        emp_b = EmployeeFactory.create(country=country_b)
+        EmployeeFactory.create(country=country_other)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+
+        # WHEN
+        response = self.client.get(
+            url,
+            [('countries', country_a), ('countries', country_b)],
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = {item['id'] for item in response.data['results']}
+        self.assertEqual(result_ids, {emp_a.id, emp_b.id})
+
+    def test_EmployeeViewSet__departments_action__returns_constant_list(self):
+        """Departments action returns the canonical sorted department list."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-departments')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(response.data), DEPARTMENTS)
+
+    def test_EmployeeViewSet__countries_action__returns_constant_list(self):
+        """Countries action returns the canonical sorted country list."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-countries')
+
+        # WHEN
+        response = self.client.get(url)
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(response.data), COUNTRY_NAMES)
 
     def test_EmployeeViewSet__filter_by_status__returns_matching_only(self):
         """List filtered by status returns only employees with that status."""
@@ -134,7 +205,7 @@ class EmployeeViewSetTests(APITestCase):
         url = reverse('employee-list')
 
         # WHEN
-        response = self.client.get(url, {'department': unmatched_department})
+        response = self.client.get(url, {'departments': unmatched_department})
 
         # THEN
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -235,21 +306,20 @@ class EmployeeViewSetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('salary', response.data)
 
-    def test_EmployeeViewSet__invalid_currency_value__returns_400(self):
-        """Present currency field with invalid choice returns 400 bad request."""
+    def test_EmployeeViewSet__currency_is_always_usd__ignores_client_value(self):
+        """Currency field is read-only; employee is created with USD regardless of payload."""
         # GIVEN
         auth_as_hr(self.client)
         url = reverse('employee-list')
-        payload = valid_employee_payload(
-            currency=invalid_choice_value(Currency.values),
-        )
+        payload = valid_employee_payload()
+        # currency is read-only — even if client supplies a different value it is ignored
 
         # WHEN
         response = self.client.post(url, payload, format='json')
 
         # THEN
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('currency', response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['currency'], 'USD')
 
     def test_EmployeeViewSet__existing_pk__returns_employee(self):
         """Existing pk retrieve returns employee details."""

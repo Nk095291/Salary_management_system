@@ -25,7 +25,21 @@ export const EMPLOYEE_STATUSES = [
   'Terminated',
 ] as const;
 
-export const CURRENCIES = ['USD', 'INR', 'GBP', 'EUR', 'AUD', 'CAD'] as const;
+// TODO: Multi-currency — when salary-normalisation across currencies is
+//       implemented, restore a CURRENCIES constant and expose currency
+//       selection in the employee form and insights aggregation.
+export const CURRENCIES = ['USD'] as const;
+
+export const ALLOWED_COUNTRIES = [
+  'Australia',
+  'Canada',
+  'Germany',
+  'India',
+  'United Kingdom',
+  'United States',
+] as const;
+
+export type AllowedCountry = (typeof ALLOWED_COUNTRIES)[number];
 
 export type Gender = (typeof GENDERS)[number];
 export type SeniorityLevel = (typeof SENIORITY_LEVELS)[number];

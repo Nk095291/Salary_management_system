@@ -2,12 +2,56 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   createEmployee,
   deleteEmployee,
+  getCountries,
+  getDepartments,
   listEmployees,
   updateEmployee,
 } from '../api/employees';
+import { CountryLabel } from '../components/CountryLabel';
 import { EmployeeForm } from '../components/EmployeeForm';
+import { MultiSelect } from '../components/MultiSelect';
 import type { Employee } from '../types/api';
 import { EMPLOYEE_STATUSES } from '../types/api';
+import { formatSalary } from '../utils/currency';
+
+const PAGE_SIZE = 25;
+
+type PageItem = number | 'ellipsis';
+
+function getPaginationRange(current: number, total: number): PageItem[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const leftSibling = Math.max(current - 2, 1);
+  const rightSibling = Math.min(current + 2, total);
+  const showLeftEllipsis = leftSibling > 2;
+  const showRightEllipsis = rightSibling < total - 1;
+
+  if (!showLeftEllipsis && showRightEllipsis) {
+    return [...Array.from({ length: 5 }, (_, i) => i + 1), 'ellipsis', total];
+  }
+
+  if (showLeftEllipsis && !showRightEllipsis) {
+    return [
+      1,
+      'ellipsis',
+      ...Array.from({ length: 5 }, (_, i) => total - 4 + i),
+    ];
+  }
+
+  if (showLeftEllipsis && showRightEllipsis) {
+    return [
+      1,
+      'ellipsis',
+      ...Array.from({ length: rightSibling - leftSibling + 1 }, (_, i) => leftSibling + i),
+      'ellipsis',
+      total,
+    ];
+  }
+
+  return Array.from({ length: total }, (_, i) => i + 1);
+}
 
 export function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -16,13 +60,36 @@ export function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [filterDepartment, setFilterDepartment] = useState('');
-  const [filterCountry, setFilterCountry] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [departmentOptions, setDepartmentOptions] = useState<string[]>([]);
+  const [countryOptions, setCountryOptions] = useState<string[]>([]);
+
+  const [draftDepartments, setDraftDepartments] = useState<string[]>([]);
+  const [draftCountries, setDraftCountries] = useState<string[]>([]);
+  const [draftStatus, setDraftStatus] = useState('');
+
+  const [appliedDepartments, setAppliedDepartments] = useState<string[]>([]);
+  const [appliedCountries, setAppliedCountries] = useState<string[]>([]);
+  const [appliedStatus, setAppliedStatus] = useState('');
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<'create' | 'edit'>('create');
   const [editing, setEditing] = useState<Employee | null>(null);
+
+  useEffect(() => {
+    async function loadOptions() {
+      try {
+        const [depts, countries] = await Promise.all([
+          getDepartments(),
+          getCountries(),
+        ]);
+        setDepartmentOptions(depts);
+        setCountryOptions(countries);
+      } catch {
+        // Filters still work if options fail; user can retry via refresh
+      }
+    }
+    loadOptions();
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,9 +97,9 @@ export function EmployeesPage() {
     try {
       const data = await listEmployees({
         page,
-        department: filterDepartment || undefined,
-        country: filterCountry || undefined,
-        status: filterStatus || undefined,
+        departments: appliedDepartments.length ? appliedDepartments : undefined,
+        countries: appliedCountries.length ? appliedCountries : undefined,
+        status: appliedStatus || undefined,
       });
       setEmployees(data.results);
       setCount(data.count);
@@ -41,49 +108,36 @@ export function EmployeesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, filterDepartment, filterCountry, filterStatus]);
+  }, [page, appliedDepartments, appliedCountries, appliedStatus]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  async function applyFilters(e: React.FormEvent) {
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const pageNumbers = getPaginationRange(page, totalPages);
+
+  function applyFilters(e: React.FormEvent) {
     e.preventDefault();
+    setAppliedDepartments(draftDepartments);
+    setAppliedCountries(draftCountries);
+    setAppliedStatus(draftStatus);
     setPage(1);
-    setLoading(true);
-    setError('');
-    try {
-      const data = await listEmployees({
-        page: 1,
-        department: filterDepartment || undefined,
-        country: filterCountry || undefined,
-        status: filterStatus || undefined,
-      });
-      setEmployees(data.results);
-      setCount(data.count);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load employees.');
-    } finally {
-      setLoading(false);
-    }
   }
 
-  async function clearFilters() {
-    setFilterDepartment('');
-    setFilterCountry('');
-    setFilterStatus('');
+  function clearFilters() {
+    setDraftDepartments([]);
+    setDraftCountries([]);
+    setDraftStatus('');
+    setAppliedDepartments([]);
+    setAppliedCountries([]);
+    setAppliedStatus('');
     setPage(1);
-    setLoading(true);
-    setError('');
-    try {
-      const data = await listEmployees({ page: 1 });
-      setEmployees(data.results);
-      setCount(data.count);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load employees.');
-    } finally {
-      setLoading(false);
-    }
+  }
+
+  function goToPage(target: number) {
+    const clamped = Math.min(Math.max(1, target), totalPages);
+    setPage(clamped);
   }
 
   function openCreate() {
@@ -115,9 +169,6 @@ export function EmployeesPage() {
     }
   }
 
-  const pageSize = 25;
-  const totalPages = Math.max(1, Math.ceil(count / pageSize));
-
   return (
     <div className="page">
       <div className="page-header">
@@ -131,27 +182,28 @@ export function EmployeesPage() {
       </div>
 
       <form className="filters card" onSubmit={applyFilters}>
-        <label>
-          Department
-          <input
-            value={filterDepartment}
-            onChange={(e) => setFilterDepartment(e.target.value)}
-            placeholder="e.g. Engineering"
-          />
-        </label>
-        <label>
-          Country
-          <input
-            value={filterCountry}
-            onChange={(e) => setFilterCountry(e.target.value)}
-            placeholder="e.g. United States"
-          />
-        </label>
+        <MultiSelect
+          label="Department"
+          options={departmentOptions}
+          value={draftDepartments}
+          onChange={setDraftDepartments}
+          placeholder="All departments"
+          searchPlaceholder="Search departments…"
+        />
+        <MultiSelect
+          label="Country"
+          options={countryOptions}
+          value={draftCountries}
+          onChange={setDraftCountries}
+          placeholder="All countries"
+          searchPlaceholder="Search countries…"
+          renderOption={(c) => <CountryLabel country={c} />}
+        />
         <label>
           Status
           <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            value={draftStatus}
+            onChange={(e) => setDraftStatus(e.target.value)}
           >
             <option value="">All</option>
             {EMPLOYEE_STATUSES.map((s) => (
@@ -221,10 +273,10 @@ export function EmployeesPage() {
                   </td>
                   <td>{emp.department}</td>
                   <td>{emp.job_title}</td>
-                  <td>{emp.country}</td>
                   <td>
-                    {emp.currency} {emp.salary}
+                    <CountryLabel country={emp.country} />
                   </td>
+                  <td>{formatSalary(emp.salary, emp.currency)}</td>
                   <td>
                     <span className={`badge badge-${emp.status.toLowerCase().replace(/\s/g, '-')}`}>
                       {emp.status}
@@ -254,25 +306,46 @@ export function EmployeesPage() {
       </div>
 
       <div className="pagination">
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={page <= 1}
-          onClick={() => setPage((p) => p - 1)}
-        >
-          Previous
-        </button>
+        <div className="pagination-controls">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={page <= 1}
+            onClick={() => goToPage(page - 1)}
+          >
+            Previous
+          </button>
+          <div className="page-numbers">
+            {pageNumbers.map((item, index) =>
+              item === 'ellipsis' ? (
+                <span key={`ellipsis-${index}`} className="page-ellipsis" aria-hidden>
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  className={`btn btn-sm ${item === page ? 'btn-primary' : 'btn-ghost'}`}
+                  aria-current={item === page ? 'page' : undefined}
+                  onClick={() => goToPage(item)}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={page >= totalPages}
+            onClick={() => goToPage(page + 1)}
+          >
+            Next
+          </button>
+        </div>
         <span className="muted">
           Page {page} of {totalPages} ({count} total)
         </span>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={page >= totalPages}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          Next
-        </button>
       </div>
     </div>
   );

@@ -110,9 +110,29 @@ All employee endpoints require HR JWT authentication.
 |-------|------|-------------|
 | `page` | number | Page number (default 1) |
 | `page_size` | number | Items per page (default 25, max 100) |
-| `department` | string | Exact match filter |
-| `country` | string | Exact match filter |
+| `departments` | string (repeatable) | Match any of the given departments (`?departments=Engineering&departments=Sales`) |
+| `countries` | string (repeatable) | Match any of the given countries (`?countries=India&countries=Germany`) |
 | `status` | string | Exact match filter (`Active`, `Terminated`) |
+
+### List departments (filter options)
+
+`GET /api/employees/departments/`
+
+**Response** `200` — JSON array of distinct department names, sorted alphabetically.
+
+```json
+["Engineering", "Finance", "Human Resources"]
+```
+
+### List countries (filter options)
+
+`GET /api/employees/countries/`
+
+**Response** `200` — JSON array of distinct country names, sorted alphabetically.
+
+```json
+["Australia", "Canada", "India", "United States"]
+```
 
 **Response** `200`
 
@@ -271,7 +291,7 @@ interface PaginatedResponse<T> {
 
 1. `POST /api/auth/login/` with email/password → save `access` and `refresh`.
 2. `GET /api/auth/me/` with Bearer token → show profile.
-3. `GET /api/employees/?department=Engineering&page=1` → render table.
+3. `GET /api/employees/?departments=Engineering&page=1` → render table.
 4. `POST /api/employees/` → create row → refresh list.
 5. `PATCH /api/employees/5/` → update row.
 6. `DELETE /api/employees/5/` → remove row.

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import type { Employee, EmployeePayload } from '../types/api';
 import {
-  CURRENCIES,
+  ALLOWED_COUNTRIES,
   EMPLOYEE_STATUSES,
   EMPLOYMENT_TYPES,
   GENDERS,
   SENIORITY_LEVELS,
 } from '../types/api';
+import { getCountryFlagUrl } from '../utils/country';
 
 export type EmployeeFormMode = 'create' | 'edit';
 
@@ -30,7 +31,7 @@ const emptyForm = (): EmployeePayload => ({
   employment_type: 'Full-time',
   country: '',
   salary: '0',
-  currency: 'USD',
+  currency: 'USD', // read-only on backend; always USD
   date_joining: new Date().toISOString().slice(0, 10),
   date_relieving: null,
   status: 'Active',
@@ -207,14 +208,24 @@ export function EmployeeForm({
       </label>
       <label>
         Country
-        <input
+        <select
           value={form.country}
           onChange={(e) => update('country', e.target.value)}
           required
-        />
+        >
+          <option value="">Select a country…</option>
+          {ALLOWED_COUNTRIES.map((c) => {
+            const flagUrl = getCountryFlagUrl(c);
+            return (
+              <option key={c} value={c}>
+                {flagUrl ? '' : ''}{c}
+              </option>
+            );
+          })}
+        </select>
       </label>
       <label>
-        Salary
+        Salary (USD)
         <input
           type="number"
           min="0"
@@ -223,19 +234,6 @@ export function EmployeeForm({
           onChange={(e) => update('salary', e.target.value)}
           required
         />
-      </label>
-      <label>
-        Currency
-        <select
-          value={form.currency}
-          onChange={(e) => update('currency', e.target.value as EmployeePayload['currency'])}
-        >
-          {CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
       </label>
       <label>
         Date joining

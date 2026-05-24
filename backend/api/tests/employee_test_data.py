@@ -4,7 +4,8 @@ from uuid import uuid4
 
 from faker import Faker
 
-from api.models import Currency, EmploymentType, Gender, SeniorityLevel, EmployeeStatus
+from api.constants import COUNTRY_NAMES
+from api.models import EmploymentType, Gender, SeniorityLevel, EmployeeStatus
 
 fake = Faker()
 
@@ -12,6 +13,11 @@ fake = Faker()
 def random_choice_value(choices):
     """Pick a random valid value from a Django TextChoices class."""
     return random.choice(choices.values)
+
+
+def random_country() -> str:
+    """Pick a random country from the allowed list."""
+    return random.choice(COUNTRY_NAMES)
 
 
 def unique_label(prefix):
@@ -22,6 +28,11 @@ def unique_label(prefix):
 def distinct_choice_values(choices, count=2):
     """Pick `count` distinct valid values from a TextChoices class."""
     return random.sample(list(choices.values), count)
+
+
+def distinct_countries(count: int) -> list[str]:
+    """Pick `count` distinct countries from the allowed list."""
+    return random.sample(COUNTRY_NAMES, count)
 
 
 def invalid_choice_value(valid_values):
@@ -42,13 +53,12 @@ def valid_employee_payload(**overrides):
         'personal_email': f'personal.{suffix}@example.com',
         'company_email': f'company.{suffix}@example.com',
         'gender': random_choice_value(Gender),
-        'department': unique_label('dept'),
+        'department': 'Engineering',
         'job_title': fake.job(),
         'seniority_level': random_choice_value(SeniorityLevel),
         'employment_type': random_choice_value(EmploymentType),
-        'country': fake.country(),
+        'country': random_country(),
         'salary': f'{random.randint(30_000, 200_000)}.00',
-        'currency': random_choice_value(Currency),
         'date_joining': fake.date_between(start_date='-10y', end_date='today').isoformat(),
         'status': random_choice_value(EmployeeStatus),
     }

@@ -39,7 +39,7 @@ API:
 
 Employee CRUD (requires `Authorization: Bearer <access>` from an HR user):
 
-- `GET /api/employees/` — list (paginated; optional `?department=`, `?country=`, `?status=`)
+- `GET /api/employees/` — list (paginated; optional `?departments=`, `?countries=`, `?status=`)
 - `POST /api/employees/` — create
 - `GET /api/employees/{id}/` — retrieve
 - `PATCH /api/employees/{id}/` — partial update

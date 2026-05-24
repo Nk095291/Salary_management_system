@@ -6,6 +6,7 @@ import {
   getInsightsOverview,
   getInsightsPayEquity,
 } from '../api/insights';
+import { CountryLabel } from '../components/CountryLabel';
 import type {
   CountryInsight,
   DepartmentInsight,
@@ -13,8 +14,9 @@ import type {
   JobTitleInsight,
   PayEquityInsight,
 } from '../types/api';
+import { formatSalary } from '../utils/currency';
 
-function formatMoney(value: number): string {
+function formatCount(value: number): string {
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 0,
   }).format(value);
@@ -115,16 +117,20 @@ export function InsightsPage() {
           <div className="stat-grid">
             <div className="stat-card">
               <span className="stat-label">Total employees</span>
-              <span className="stat-value">{formatMoney(overview.total_employees)}</span>
+              <span className="stat-value">{formatCount(overview.total_employees)}</span>
             </div>
             <div className="stat-card">
               <span className="stat-label">Average salary</span>
-              <span className="stat-value">{formatMoney(overview.avg_salary)}</span>
+              <span className="stat-value">{formatSalary(overview.avg_salary)}</span>
             </div>
             <div className="stat-card">
               <span className="stat-label">Highest-paid country</span>
               <span className="stat-value">
-                {overview.highest_paid_country ?? '—'}
+                {overview.highest_paid_country ? (
+                  <CountryLabel country={overview.highest_paid_country} />
+                ) : (
+                  '—'
+                )}
               </span>
             </div>
           </div>
@@ -159,12 +165,14 @@ export function InsightsPage() {
             <tbody>
               {countries.map((row) => (
                 <tr key={row.country}>
-                  <td>{row.country}</td>
+                  <td>
+                    <CountryLabel country={row.country} />
+                  </td>
                   <td>{row.headcount}</td>
-                  <td>{formatMoney(row.min_salary)}</td>
-                  <td>{formatMoney(row.max_salary)}</td>
-                  <td>{formatMoney(row.avg_salary)}</td>
-                  <td>{formatMoney(row.median_salary)}</td>
+                  <td>{formatSalary(row.min_salary)}</td>
+                  <td>{formatSalary(row.max_salary)}</td>
+                  <td>{formatSalary(row.avg_salary)}</td>
+                  <td>{formatSalary(row.median_salary)}</td>
                 </tr>
               ))}
             </tbody>
@@ -191,8 +199,8 @@ export function InsightsPage() {
                 <tr key={row.department}>
                   <td>{row.department}</td>
                   <td>{row.headcount}</td>
-                  <td>{formatMoney(row.avg_salary)}</td>
-                  <td>{formatMoney(row.total_payroll)}</td>
+                  <td>{formatSalary(row.avg_salary)}</td>
+                  <td>{formatSalary(row.total_payroll)}</td>
                 </tr>
               ))}
             </tbody>
@@ -233,14 +241,14 @@ export function InsightsPage() {
                 <div className="job-title-header">
                   <strong>{row.job_title}</strong>
                   <span className="muted">
-                    {row.headcount} employees · avg {formatMoney(row.avg_salary)}
+                    {row.headcount} employees · avg {formatSalary(row.avg_salary)}
                   </span>
                 </div>
                 <div className="seniority-grid">
                   {Object.entries(row.seniority_breakdown).map(([level, avg]) => (
                     <div key={level} className="seniority-item">
                       <span className="stat-label">{level}</span>
-                      <span>{formatMoney(avg)}</span>
+                      <span>{formatSalary(avg)}</span>
                     </div>
                   ))}
                 </div>
@@ -268,8 +276,8 @@ export function InsightsPage() {
               {payEquity.map((row) => (
                 <tr key={row.department}>
                   <td>{row.department}</td>
-                  <td>{formatMoney(row.male_avg)}</td>
-                  <td>{formatMoney(row.female_avg)}</td>
+                  <td>{formatSalary(row.male_avg)}</td>
+                  <td>{formatSalary(row.female_avg)}</td>
                   <td>
                     <span
                       className={

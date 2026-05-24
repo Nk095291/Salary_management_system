@@ -1,6 +1,9 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
 
+from api.constants import COUNTRY_NAMES, DEPARTMENTS
 from api.models import Employee
 from api.permissions import IsHRUser
 from api.serializers import EmployeeSerializer
@@ -20,13 +23,23 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Employee.objects.all().order_by('id')
-        department = self.request.query_params.get('department')
-        country = self.request.query_params.get('country')
-        status = self.request.query_params.get('status')
-        if department:
-            queryset = queryset.filter(department=department)
-        if country:
-            queryset = queryset.filter(country=country)
-        if status:
-            queryset = queryset.filter(status=status)
+        departments = self.request.query_params.getlist('departments')
+        countries = self.request.query_params.getlist('countries')
+        status_param = self.request.query_params.get('status')
+        if departments:
+            queryset = queryset.filter(department__in=departments)
+        if countries:
+            queryset = queryset.filter(country__in=countries)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
         return queryset
+
+    @action(detail=False, methods=['get'], url_path='departments')
+    def departments(self, request):
+        """Return the canonical list of allowed departments."""
+        return Response(DEPARTMENTS)
+
+    @action(detail=False, methods=['get'], url_path='countries')
+    def countries(self, request):
+        """Return the canonical list of allowed countries."""
+        return Response(COUNTRY_NAMES)

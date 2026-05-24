@@ -5,6 +5,7 @@ from pathlib import Path
 
 from django.conf import settings
 
+from api.constants import COUNTRIES, DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT
 from api.models import (
     Currency,
     Employee,
@@ -15,48 +16,6 @@ from api.models import (
 )
 
 DATA_DIR = Path(settings.BASE_DIR) / 'data'
-
-DEPARTMENTS = [
-    'Engineering',
-    'Sales',
-    'Human Resources',
-    'Finance',
-    'Marketing',
-    'Operations',
-    'Legal',
-    'Support',
-]
-
-JOB_TITLES_BY_DEPARTMENT = {
-    'Engineering': [
-        'Software Engineer',
-        'Senior Software Engineer',
-        'QA Engineer',
-        'DevOps Engineer',
-        'Engineering Manager',
-    ],
-    'Sales': [
-        'Account Executive',
-        'Sales Representative',
-        'Sales Manager',
-        'Business Development Manager',
-    ],
-    'Human Resources': ['HR Manager', 'HR Specialist', 'Recruiter'],
-    'Finance': ['Financial Analyst', 'Accountant', 'Finance Manager'],
-    'Marketing': ['Marketing Specialist', 'Content Strategist', 'Marketing Manager'],
-    'Operations': ['Operations Analyst', 'Operations Manager', 'Project Coordinator'],
-    'Legal': ['Legal Counsel', 'Compliance Officer'],
-    'Support': ['Support Specialist', 'Customer Success Manager'],
-}
-
-COUNTRIES = [
-    ('United States', Currency.USD, 40_000, 180_000),
-    ('India', Currency.INR, 400_000, 2_500_000),
-    ('United Kingdom', Currency.GBP, 28_000, 95_000),
-    ('Germany', Currency.EUR, 35_000, 110_000),
-    ('Canada', Currency.CAD, 45_000, 120_000),
-    ('Australia', Currency.AUD, 50_000, 130_000),
-]
 
 
 def load_names(path: Path) -> list[str]:
@@ -77,7 +36,7 @@ def build_employee(
     last_name = rng.choice(last_names)
     slug = slugify_email_part(f'{first_name}.{last_name}.{index}')
     department = rng.choice(DEPARTMENTS)
-    country, currency, salary_min, salary_max = rng.choice(COUNTRIES)
+    country, salary_min, salary_max = rng.choice(COUNTRIES)
     status = rng.choices(
         list(EmployeeStatus.values),
         weights=[90, 10],
@@ -112,7 +71,7 @@ def build_employee(
         )[0],
         country=country,
         salary=salary,
-        currency=currency,
+        currency=Currency.USD,
         date_joining=date_joining,
         date_relieving=date_relieving,
         status=status,

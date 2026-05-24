@@ -8,8 +8,8 @@ import type {
 export interface EmployeeListParams {
   page?: number;
   page_size?: number;
-  department?: string;
-  country?: string;
+  departments?: string[];
+  countries?: string[];
   status?: string;
 }
 
@@ -19,13 +19,29 @@ export async function listEmployees(
   const search = new URLSearchParams();
   if (params.page) search.set('page', String(params.page));
   if (params.page_size) search.set('page_size', String(params.page_size));
-  if (params.department) search.set('department', params.department);
-  if (params.country) search.set('country', params.country);
+  if (params.departments) {
+    for (const d of params.departments) {
+      search.append('departments', d);
+    }
+  }
+  if (params.countries) {
+    for (const c of params.countries) {
+      search.append('countries', c);
+    }
+  }
   if (params.status) search.set('status', params.status);
 
   const qs = search.toString();
   const path = qs ? `/api/employees/?${qs}` : '/api/employees/';
   return apiRequest<PaginatedResponse<Employee>>(path);
+}
+
+export async function getDepartments(): Promise<string[]> {
+  return apiRequest<string[]>('/api/employees/departments/');
+}
+
+export async function getCountries(): Promise<string[]> {
+  return apiRequest<string[]>('/api/employees/countries/');
 }
 
 export async function getEmployee(id: number): Promise<Employee> {
