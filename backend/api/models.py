@@ -105,11 +105,6 @@ class Employee(models.Model):
             raise ValidationError(
                 {'date_relieving': 'Date of relieving must be on or after date of joining.'}
             )
-    
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
 
 
 class HRUserManager(BaseUserManager):

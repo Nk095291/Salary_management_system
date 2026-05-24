@@ -18,6 +18,30 @@ from api.models import (
 )
 
 
+def expected_create_hr_new_employee_query_count(*, personal_email_exists_checks: int = 1) -> int:
+    """
+    Expected DB queries when create_hr creates a new employee on SQLite.
+
+    - 1 query to check for an existing HR user email
+    - personal_email_exists_checks while-loop collision probes
+    - 1 query to insert the employee
+    - 1 query to insert the HR user
+    """
+    return 1 + personal_email_exists_checks + 1 + 1
+
+
+def expected_create_hr_link_existing_query_count(*, create_user: bool = True) -> int:
+    """
+    Expected DB queries when create_hr links an existing employee on SQLite.
+
+    - 1 query to check for an existing HR user email
+    - 1 query to load the employee by primary key
+    - 1 query to check whether the employee is already linked
+    - optionally 1 query to insert the HR user
+    """
+    return 3 + (1 if create_user else 0)
+
+
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     DEBUG=True,
@@ -35,6 +59,7 @@ class CreateHrCommandTests(TestCase):
     - Linking to existing employee by --employee-pk.
     - Invalid or already-linked employee_pk raises errors.
     - Personal email suffix collision when generating employee.
+    - Query counts match duplicate checks, employee creation, and linking paths.
     """
 
     def test_create_hr__new_email__creates_user_and_sends_mail(self):
@@ -177,3 +202,122 @@ class CreateHrCommandTests(TestCase):
         user = HRUser.objects.get(email=email)
         expected = f'hr.{email.replace("@", "_")}.1@internal.local'
         self.assertEqual(user.employee.personal_email, expected)
+
+    def test_create_hr__query_count__new_email_creates_employee(self):
+        """Creating a new HR user issues one duplicate check plus employee/user inserts."""
+        expected_queries = expected_create_hr_new_employee_query_count()
+
+        with self.assertNumQueries(expected_queries):
+            call_command('create_hr', email='query.new@company.com', no_input=True)
+
+    def test_create_hr__query_count__existing_employee_link(self):
+        """Linking an existing employee skips employee creation queries."""
+        emp = Employee.objects.create(
+            first_name='Existing',
+            last_name='User',
+            personal_email='query.existing.personal@company.com',
+            company_email='query.existing@company.com',
+            gender=Gender.PREFER_NOT_TO_SAY,
+            department='HR',
+            job_title='HR',
+            seniority_level=SeniorityLevel.SENIOR,
+            employment_type=EmploymentType.FULL_TIME,
+            country='United States',
+            salary=0,
+            currency=Currency.USD,
+            date_joining=timezone.localdate(),
+            status=EmployeeStatus.ACTIVE,
+        )
+        expected_queries = expected_create_hr_link_existing_query_count()
+
+        with self.assertNumQueries(expected_queries):
+            call_command(
+                'create_hr',
+                email='query.link@company.com',
+                employee_pk=emp.pk,
+                no_input=True,
+            )
+
+    def test_create_hr__query_count__personal_email_collision(self):
+        """Personal email collision adds one extra exists check before employee insert."""
+        email = 'query.collision@company.com'
+        base_personal = f'hr.{email.replace("@", "_")}@internal.local'
+        Employee.objects.create(
+            first_name='Blocker',
+            last_name='User',
+            personal_email=base_personal,
+            company_email='query.blocker@company.com',
+            gender=Gender.PREFER_NOT_TO_SAY,
+            department='HR',
+            job_title='HR',
+            seniority_level=SeniorityLevel.SENIOR,
+            employment_type=EmploymentType.FULL_TIME,
+            country='United States',
+            salary=0,
+            currency=Currency.USD,
+            date_joining=timezone.localdate(),
+            status=EmployeeStatus.ACTIVE,
+        )
+        expected_queries = expected_create_hr_new_employee_query_count(
+            personal_email_exists_checks=2,
+        )
+
+        with self.assertNumQueries(expected_queries):
+            call_command('create_hr', email=email, no_input=True)
+
+
+class CreateHrCommandEdgeTests(TestCase):
+    """
+    Edge-case tests for create_hr management command query behavior.
+
+    These capture early-exit paths that should avoid unnecessary database work.
+    """
+
+    def test_create_hr__query_count__duplicate_email_only(self):
+        """Duplicate email should stop after the HR user exists check."""
+        call_command('create_hr', email='query.dup@company.com', no_input=True)
+
+        with self.assertNumQueries(1):
+            with self.assertRaises(CommandError):
+                call_command('create_hr', email='query.dup@company.com', no_input=True)
+
+    def test_create_hr__query_count__missing_email_no_input(self):
+        """Missing email with --no-input should fail before touching the database."""
+        with self.assertNumQueries(0):
+            with self.assertRaisesMessage(
+                CommandError, '--email is required when using --no-input.'
+            ):
+                call_command('create_hr', no_input=True)
+
+    def test_create_hr__query_count__invalid_employee_pk(self):
+        """Invalid employee_pk should issue only duplicate and lookup queries."""
+        with self.assertNumQueries(2):
+            with self.assertRaisesMessage(CommandError, 'Employee 9999 not found.'):
+                call_command(
+                    'create_hr',
+                    email='query.invalid@company.com',
+                    employee_pk=9999,
+                    no_input=True,
+                )
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        DEBUG=True,
+    )
+    def test_create_hr__query_count__employee_already_linked(self):
+        """Already-linked employee should stop before creating a second HR user."""
+        call_command('create_hr', email='query.first@company.com', no_input=True)
+        emp = HRUser.objects.get(email='query.first@company.com').employee
+        expected_queries = expected_create_hr_link_existing_query_count(create_user=False)
+
+        with self.assertNumQueries(expected_queries):
+            with self.assertRaisesMessage(
+                CommandError,
+                f'Employee {emp.pk} is already linked to an HR user.',
+            ):
+                call_command(
+                    'create_hr',
+                    email='query.second@company.com',
+                    employee_pk=emp.pk,
+                    no_input=True,
+                )

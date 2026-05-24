@@ -20,6 +20,69 @@ from api.tests.factory.models.employee import EmployeeFactory
 from api.tests.helpers import auth_as_hr, auth_as_non_hr
 
 
+def expected_employee_list_query_count(*, has_page_results: bool = True) -> int:
+    """
+    Expected DB queries for paginated employee list on SQLite.
+
+    - 1 JWT auth lookup (api_hruser)
+    - 1 COUNT for pagination
+    - 1 SELECT for the page when the filtered count is greater than zero
+    """
+    pagination_queries = 2 if has_page_results else 1
+    return 1 + pagination_queries
+
+
+def expected_employee_retrieve_query_count() -> int:
+    """JWT auth lookup plus a single employee SELECT."""
+    return 2
+
+
+def expected_employee_metadata_action_query_count() -> int:
+    """Departments/countries actions only authenticate; payload comes from constants."""
+    return 1
+
+
+def expected_employee_create_query_count(*, completes: bool = True) -> int:
+    """
+    Expected DB queries for employee create on SQLite.
+
+    Successful create:
+    - 1 JWT auth lookup
+    - 2 DRF UniqueValidator checks (personal and company email)
+    - 1 INSERT
+
+    Duplicate email rejection stops after the failing uniqueness check.
+    """
+    if completes:
+        return 4
+    return 3
+
+
+def expected_employee_patch_query_count(*, validates_emails: bool = False) -> int:
+    """
+    Expected DB queries for employee partial update on SQLite.
+
+    - 1 JWT auth lookup
+    - 1 employee SELECT
+    - optionally 2 DRF UniqueValidator checks when email fields are patched
+    - 1 UPDATE
+    """
+    email_queries = 2 if validates_emails else 0
+    return 1 + 1 + email_queries + 1
+
+
+def expected_employee_delete_query_count() -> int:
+    """
+    Expected DB queries for employee delete on SQLite.
+
+    - 1 JWT auth lookup
+    - 1 employee SELECT
+    - 1 HRUser FK nullify
+    - 1 DELETE
+    """
+    return 4
+
+
 class EmployeeViewSetTests(APITestCase):
     """
     Tests for EmployeeViewSet CRUD endpoints.
@@ -48,10 +111,14 @@ class EmployeeViewSetTests(APITestCase):
     - Existing pk retrieve returns employee details.
     - Retrieve, patch, and delete on non-existent pk return 404.
     - Patch payload updates employee fields.
+    - Patch personal_email or company_email to another employee's email
+      returns 400 with user-friendly message.
     - Patch date_relieving while status is Active returns 400 bad request.
     - Patch date_relieving before date_joining returns 400 bad request.
     - Put request returns method not allowed.
     - Delete existing employee removes record from database.
+    - List, retrieve, create, patch, delete, and metadata actions issue predictable
+      DB query counts (auth, pagination, validation, and write paths).
     """
 
     def test_EmployeeViewSet__unauthenticated_list__returns_401(self):
@@ -717,6 +784,60 @@ class EmployeeViewSetTests(APITestCase):
         employee.refresh_from_db()
         self.assertEqual(employee.salary, updated_salary)
 
+    def test_EmployeeViewSet__patch_duplicate_personal_email__returns_400(self):
+        """Patch personal_email to another employee's email returns 400."""
+        # GIVEN
+        existing = EmployeeFactory.create()
+        employee = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+        original_personal_email = employee.personal_email
+
+        # WHEN
+        response = self.client.patch(
+            url,
+            {'personal_email': existing.personal_email},
+            format='json',
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('personal_email', response.data)
+        self.assertEqual(
+            response.data['personal_email'][0],
+            'An employee with this personal email already exists.',
+        )
+        employee.refresh_from_db()
+        self.assertEqual(employee.personal_email, original_personal_email)
+        self.assertEqual(Employee.objects.filter(personal_email=existing.personal_email).count(), 1)
+
+    def test_EmployeeViewSet__patch_duplicate_company_email__returns_400(self):
+        """Patch company_email to another employee's email returns 400."""
+        # GIVEN
+        existing = EmployeeFactory.create()
+        employee = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+        original_company_email = employee.company_email
+
+        # WHEN
+        response = self.client.patch(
+            url,
+            {'company_email': existing.company_email},
+            format='json',
+        )
+
+        # THEN
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('company_email', response.data)
+        self.assertEqual(
+            response.data['company_email'][0],
+            'An employee with this company email already exists.',
+        )
+        employee.refresh_from_db()
+        self.assertEqual(employee.company_email, original_company_email)
+        self.assertEqual(Employee.objects.filter(company_email=existing.company_email).count(), 1)
+
     def test_EmployeeViewSet__patch_date_relieving_while_active__returns_400(
         self,
     ):
@@ -834,3 +955,143 @@ class EmployeeViewSetTests(APITestCase):
 
         # THEN
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_EmployeeViewSet__query_count__list_with_results(self):
+        """Paginated list issues auth, count, and page SELECT queries."""
+        # GIVEN
+        EmployeeFactory.create_batch(3)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        expected_queries = expected_employee_list_query_count(has_page_results=True)
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_queries):
+            response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_EmployeeViewSet__query_count__list_filtered_no_matches(self):
+        """Filtered list with zero matches skips the page SELECT query."""
+        # GIVEN
+        EmployeeFactory.create(department=unique_label('dept'))
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        expected_queries = expected_employee_list_query_count(has_page_results=False)
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_queries):
+            response = self.client.get(url, {'departments': unique_label('dept')})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['results'], [])
+
+    def test_EmployeeViewSet__query_count__list_filtered_with_matches(self):
+        """Filtered list with matches still issues count and page SELECT queries."""
+        # GIVEN
+        matched_department = unique_label('dept')
+        EmployeeFactory.create(department=matched_department)
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        expected_queries = expected_employee_list_query_count(has_page_results=True)
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_queries):
+            response = self.client.get(url, {'departments': matched_department})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+
+    def test_EmployeeViewSet__query_count__retrieve(self):
+        """Retrieve issues auth lookup and a single employee SELECT."""
+        # GIVEN
+        employee = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_employee_retrieve_query_count()):
+            response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_EmployeeViewSet__query_count__departments_action(self):
+        """Departments action only authenticates; data is served from constants."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-departments')
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_employee_metadata_action_query_count()):
+            response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_EmployeeViewSet__query_count__countries_action(self):
+        """Countries action only authenticates; data is served from constants."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-countries')
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_employee_metadata_action_query_count()):
+            response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_EmployeeViewSet__query_count__create_success(self):
+        """Successful create runs uniqueness checks and a single insert."""
+        # GIVEN
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        payload = valid_employee_payload()
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_employee_create_query_count(completes=True)):
+            response = self.client.post(url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_EmployeeViewSet__query_count__create_duplicate_email(self):
+        """Duplicate company email stops after validation without inserting."""
+        # GIVEN
+        existing = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-list')
+        payload = valid_employee_payload(company_email=existing.company_email)
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_employee_create_query_count(completes=False)):
+            response = self.client.post(url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_EmployeeViewSet__query_count__patch(self):
+        """Patch loads the employee, validates emails, and issues one update."""
+        # GIVEN
+        employee = EmployeeFactory.create()
+        updated_job_title = random.choice(JOB_TITLES_BY_DEPARTMENT[employee.department])
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_employee_patch_query_count()):
+            response = self.client.patch(
+                url,
+                {'job_title': updated_job_title},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_EmployeeViewSet__query_count__delete(self):
+        """Delete loads the employee, clears HR links, and removes the row."""
+        # GIVEN
+        employee = EmployeeFactory.create()
+        auth_as_hr(self.client)
+        url = reverse('employee-detail', kwargs={'pk': employee.pk})
+
+        # WHEN / THEN
+        with self.assertNumQueries(expected_employee_delete_query_count()):
+            response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)

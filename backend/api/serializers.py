@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from api.constants import COUNTRY_NAMES, DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT
@@ -51,29 +52,23 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         extra_kwargs = {
-            'personal_email': {'validators': []},
-            'company_email': {'validators': []},
+            'personal_email': {
+                'validators': [
+                    UniqueValidator(
+                        queryset=Employee.objects.all(),
+                        message='An employee with this personal email already exists.',
+                    ),
+                ],
+            },
+            'company_email': {
+                'validators': [
+                    UniqueValidator(
+                        queryset=Employee.objects.all(),
+                        message='An employee with this company email already exists.',
+                    ),
+                ],
+            },
         }
-
-    def validate_personal_email(self, value: str) -> str:
-        queryset = Employee.objects.filter(personal_email=value)
-        if self.instance:
-            queryset = queryset.exclude(pk=self.instance.pk)
-        if queryset.exists():
-            raise serializers.ValidationError(
-                'An employee with this personal email already exists.'
-            )
-        return value
-
-    def validate_company_email(self, value: str) -> str:
-        queryset = Employee.objects.filter(company_email=value)
-        if self.instance:
-            queryset = queryset.exclude(pk=self.instance.pk)
-        if queryset.exists():
-            raise serializers.ValidationError(
-                'An employee with this company email already exists.'
-            )
-        return value
 
     def validate_department(self, value: str) -> str:
         if value not in DEPARTMENTS:
