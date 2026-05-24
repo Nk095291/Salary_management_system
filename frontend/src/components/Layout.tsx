@@ -24,6 +24,9 @@ export function Layout() {
           <NavLink to="/employees" className={({ isActive }) => (isActive ? 'active' : '')}>
             Employees
           </NavLink>
+          <NavLink to="/insights" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Insights
+          </NavLink>
           <button type="button" className="btn btn-ghost" onClick={handleLogout}>
             Logout
           </button>

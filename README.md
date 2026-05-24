@@ -46,6 +46,14 @@ Employee CRUD (requires `Authorization: Bearer <access>` from an HR user):
 - `PUT /api/employees/{id}/` — full update
 - `DELETE /api/employees/{id}/` — delete
 
+Salary insights (HR JWT required):
+
+- `GET /api/insights/overview/`
+- `GET /api/insights/by-country/`
+- `GET /api/insights/by-department/`
+- `GET /api/insights/by-job-title/?country=...`
+- `GET /api/insights/pay-equity/`
+
 `create_hr` prompts for email, generates a password, emails credentials, and prints the password in the console when `DEBUG=True`.
 
 Seed employees (10,000 by default; names from `backend/data/first_names.txt` and `backend/data/last_names.txt`):
@@ -78,3 +86,4 @@ The Vite dev server proxies `/api` requests to Django on port 8000.
 | `/login` | HR login |
 | `/profile` | Current user from `/api/auth/me/` |
 | `/employees` | Employee list, filters, CRUD |
+| `/insights` | Salary insights dashboards |

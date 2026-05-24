@@ -198,6 +198,20 @@ Partial update; `id` is not writable.
 
 ---
 
+## Salary insights
+
+All insight endpoints require HR JWT. Metrics use **active** employees only.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/insights/overview/` | Org totals, avg salary, top country, gender % |
+| `GET /api/insights/by-country/` | Per-country min/max/avg/median |
+| `GET /api/insights/by-department/` | Headcount, avg salary, total payroll |
+| `GET /api/insights/by-job-title/?country=` | Required `country` param; seniority breakdown |
+| `GET /api/insights/pay-equity/` | Male vs female avg gap by department |
+
+---
+
 ## TypeScript types
 
 See [`src/types/api.ts`](../src/types/api.ts) for interfaces used in the app.

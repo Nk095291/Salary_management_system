@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import { EmployeesPage } from './pages/EmployeesPage';
+import { InsightsPage } from './pages/InsightsPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { hasAccessToken } from './api/client';
@@ -29,6 +30,7 @@ function App() {
           >
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/employees" element={<EmployeesPage />} />
+            <Route path="/insights" element={<InsightsPage />} />
           </Route>
           <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<RootRedirect />} />

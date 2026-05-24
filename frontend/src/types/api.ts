@@ -91,3 +91,40 @@ export interface ApiErrorBody {
   detail?: string;
   [key: string]: string | string[] | undefined;
 }
+
+export interface InsightsOverview {
+  total_employees: number;
+  avg_salary: number;
+  highest_paid_country: string | null;
+  gender_distribution: Record<string, number>;
+}
+
+export interface CountryInsight {
+  country: string;
+  headcount: number;
+  min_salary: number;
+  max_salary: number;
+  avg_salary: number;
+  median_salary: number;
+}
+
+export interface DepartmentInsight {
+  department: string;
+  headcount: number;
+  avg_salary: number;
+  total_payroll: number;
+}
+
+export interface JobTitleInsight {
+  job_title: string;
+  avg_salary: number;
+  headcount: number;
+  seniority_breakdown: Record<string, number>;
+}
+
+export interface PayEquityInsight {
+  department: string;
+  male_avg: number;
+  female_avg: number;
+  gap_percent: number;
+}
