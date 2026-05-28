@@ -31,10 +31,12 @@ def build_employee(
     first_names: list[str],
     last_names: list[str],
     rng: random.Random,
+    run_tag: str = '',
 ) -> Employee:
     first_name = rng.choice(first_names)
     last_name = rng.choice(last_names)
-    slug = slugify_email_part(f'{first_name}.{last_name}.{index}')
+    slug_base = slugify_email_part(f'{first_name}.{last_name}.{index}')
+    slug = f'{slug_base}.{run_tag}' if run_tag else slug_base
     department = rng.choice(DEPARTMENTS)
     country, salary_min, salary_max = rng.choice(COUNTRIES)
     status = rng.choices(

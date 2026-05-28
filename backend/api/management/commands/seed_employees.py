@@ -63,6 +63,7 @@ class Command(BaseCommand):
             return
 
         start = time.perf_counter()
+        run_tag = format(time.time_ns(), 'x')[-8:]
 
         with transaction.atomic():
             if clear:
@@ -73,7 +74,7 @@ class Command(BaseCommand):
             batch: list[Employee] = []
             for index in range(count):
                 batch.append(
-                    build_employee(index + 1, first_names, last_names, rng)
+                    build_employee(index + 1, first_names, last_names, rng, run_tag=run_tag)
                 )
                 if len(batch) >= batch_size:
                     Employee.objects.bulk_create(batch, batch_size=batch_size)

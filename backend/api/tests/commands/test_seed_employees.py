@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.core.management import call_command
-from django.db import IntegrityError
 from django.test import TestCase
 
 from api.models import Employee
@@ -252,15 +251,21 @@ class SeedEmployeesCommandEdgeTests(TestCase):
 
         self.assertEqual(Employee.objects.count(), 3)
 
-    def test_seed_employees__duplicate_slug_collision__second_run_without_clear_fails(self):
-        """
-        Re-seeding with the same seed and indexes can duplicate unique emails.
-
-        This documents that callers should use --clear or unique seeds when re-running.
-        """
+    def test_seed_employees__same_seed_second_run_without_clear__keeps_emails_unique(self):
+        """Re-seeding with same seed should still generate unique emails across runs."""
         # GIVEN
         call_command('seed_employees', count=2, seed=99, clear=True)
 
-        # WHEN / THEN
-        with self.assertRaises(IntegrityError):
-            call_command('seed_employees', count=2, seed=99)
+        # WHEN
+        call_command('seed_employees', count=2, seed=99)
+
+        # THEN
+        self.assertEqual(Employee.objects.count(), 4)
+        self.assertEqual(
+            Employee.objects.values('company_email').distinct().count(),
+            4,
+        )
+        self.assertEqual(
+            Employee.objects.values('personal_email').distinct().count(),
+            4,
+        )
